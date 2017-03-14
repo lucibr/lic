@@ -1,0 +1,5 @@
+mpirun -np 4 ./a.out 50000
+
+Ulitma cifra reprezinta numarul numerelor citite din fisier
+
+mpicc <filename> -lm (link math?? )

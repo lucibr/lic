@@ -1,0 +1,5 @@
+mpirun -np 4 ./a.out 3 3
+
+Prima cifra reprezinta numarul de linii iar cea de-a doua numarul coloanelor matricii
+
+mpicc <filename> -lm (link math?? )

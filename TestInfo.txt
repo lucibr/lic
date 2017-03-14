@@ -1,0 +1,56 @@
+Testare suma matrici (intregi):
+	Dimensiuni matrice - 10000 x 10000
+			4 procesoare - timp de executie 0.677364s	
+			3 procesoare - timp de executie 0.830916s
+			2 procesoare - timp de executie 1.194977s
+
+	Dimensiuni matrice - 10000 x 10000
+			23.02.2017
+			4 procesoare - timp de executie 0.651364s	
+			3 procesoare - timp de executie 0.584109s
+			2 procesoare - timp de executie 0.527809s
+			1 procesor - timp de executie 0.574805s
+
+	Dimensiuni matrice - 20000 x 20000
+			23.02.2017
+			4 procesoare - timp de executie 12.953902s	
+			3 procesoare - timp de executie 14.788758s
+			2 procesoare - timp de executie 24.307452s
+			1 procesor - timp de executie 2.377562s
+
+
+Produs matrici link: 
+	http://www.math.nyu.edu/~neylon/linalgfall04/project1/dj/reqofmatrixmult.htm
+	Dimensiuni matrici - 1000x1000, 1000x1000
+			4 procesoare - timp de executie 4.756876s	
+			3 procesoare - timp de executie 6.844977s
+			2 procesoare - timp de executie 6.844977s
+
+			23.02.2017
+			4 procesoare - timp de executie 5.069571s	
+			3 procesoare - timp de executie 6.290846s
+			2 procesoare - timp de executie 4.324138s
+			1 procesor - timp de executie 10.570977s
+
+
+	Dimensiuni matrici - 1500x1500, 1500x1500
+			23.02.2017
+			4 procesoare - timp de executie 15.702236s	
+			3 procesoare - timp de executie 20.517427s
+			2 procesoare - timp de executie 18.346879s
+			1 procesor - timp de executie 42.140581s
+
+
+	Dimensiuni matrici - 2500x2500, 2500x2500
+			23.02.2017
+			4 procesoare - timp de executie 75.897737s	
+			3 procesoare - timp de executie 86.858810s
+			2 procesoare - timp de executie 82.927675s
+			1 procesor - timp de executie 202.130395s
+
+	Dimensiuni matrici - 5000x5000, 5000x5000
+			23.02.2017
+			4 procesoare - timp de executie 639.831198s	
+			3 procesoare - timp de executie 723.626728s
+			2 procesoare - timp de executie 642.686458s
+			1 procesor - timp de executie 1517.037789s

@@ -1,0 +1,69 @@
+1)  compile source code: mpicc -Wall -c -fPIC matMPIOp.c  (mpicc -g -Wall -fPIC -Wextra -I. -c matMPIOp.c)  -> creates file library object code (matMPIOp.o)
+2)  mpicc -shared -Wl,-soname,libmatMPIOp.so -o libmatMPIOp.so matMPIOp.o  -> creates a dynamic library stored in libmatMPIOp.so file with the same SOname
+
+SAU 
+    mpicc -shared -Wl,-soname,libmatMPIOp.so.1 -o libmatMPIOp.so.1.0 matMPIOp.o
+    2*) ln -sf libmatMPIOp.so.1.0 libmatMPIOp.so
+	ln -sf libmatMPIOp.so.1.0 libmatMPIOp.so.1
+
+3)  mpicc -Wall testProg.c -ldl -> compile and link the program to the library created earlier
+4)  export LD_LIBRARY_PATH=. -> we must set the LD_LIBRARY_PATH to the current directory because Linux dynamic loader uses this variable to search for libraries (We could also add this library to the other paths that GNU Linker and Linux dynamic loader use and then we wouldn't need to adjust LD_LIBRARY_PATH.)
+
+5) ./testProg.out [cmd line params]
+
+
+When using dynamic libraries with POSIX API, the source code must load the library functions:
+
+#include <dlfcn.h>  (used for loading the library functions)
+#include "matMPIOp.h" (load the header file for the custom library)
+
+int main()
+{
+	void *handle;
+    	char *error;
+
+	//Load library
+	handle = dlopen("libmatMPIOp.so", RTLD_LAZY);
+	if(!handle)
+	{
+		fputs(dlerror(), stderr);
+		exit(1);
+	}
+
+	//Load function addresses
+	prodM = dlsym(handle, "prodM");
+	if( (error = dlerror()) != NULL)
+	{
+		fputs(error, stderr);
+		exit(1);
+	}
+
+	sumM = dlsym(handle, "sumM");
+	if( (error = dlerror()) != NULL)
+	{
+		fputs(error, stderr);
+		exit(1);
+	}
+
+	malloc2dint = dlsym(handle, "malloc2dint");
+	if( (error = dlerror()) != NULL)
+	{
+		fputs(error, stderr);
+		exit(1);
+	}
+
+	free2dint = dlsym(handle, "free2dint");
+	if( (error = dlerror()) != NULL)
+	{
+		fputs(error, stderr);
+		exit(1);
+	}
+
+	printMatrix = dlsym(handle, "printMatrix");
+	if( (error = dlerror()) != NULL)
+	{
+		fputs(error, stderr);
+		exit(1);
+	}
+	return 0;
+}

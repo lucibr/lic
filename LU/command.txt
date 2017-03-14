@@ -1,0 +1,2 @@
+mpirun -np 9 ./a.out 9 9 3 3 3 3
+mpirun -np 9 ./a.out 21 21 3 3 3 3
