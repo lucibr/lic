@@ -112,12 +112,17 @@ int free2ddouble(double ***array)
 int infMatInv(double **mat, double **inv, int dim)
 {
 	int i, j, k;
-	double multiplier;
+	double multiplier, **aux;
+	if(malloc2ddouble(&aux, dim, dim) != 0)
+	{
+		return -5;
+	}
 	//Initialize I matrix
 	for(i = 0; i < dim; i++)
 	{
 		for(j = 0; j < dim; j++)
 		{
+			aux[i][j] = mat[i][j];
 			if(i == j)
 			{
 				inv[i][j] = 1;
@@ -134,19 +139,19 @@ int infMatInv(double **mat, double **inv, int dim)
 		{
 			if(i == j)
 			{
-				multiplier = mat[i][i];
+				multiplier = aux[i][i];
 				for(k = 0; k <= i; k++)
 				{
-					mat[i][k] /= multiplier;
+					aux[i][k] /= multiplier;
 					inv[i][k] /= multiplier;
 				}
 			}
 			else
 			{
-				multiplier = mat[i][j];
+				multiplier = aux[i][j];
 				for(k = 0; k < i; k++)
 				{
-					mat[i][k] = mat[i][k] - multiplier * mat[j][k];
+					aux[i][k] = aux[i][k] - multiplier * aux[j][k];
 					inv[i][k] = inv[i][k] - multiplier * inv[j][k];
 				}
 			}
@@ -156,7 +161,7 @@ int infMatInv(double **mat, double **inv, int dim)
 	{
 		for(j = 0; j < dim; j++)
 		{
-			if((i == j && fabs(mat[i][j]-1) > EPS) || (i != j && fabs(mat[i][j]) > EPS))
+			if((i == j && fabs(aux[i][j]-1) > EPS) || (i != j && fabs(aux[i][j]) > EPS))
 			{
 				return -2;
 			}
@@ -169,12 +174,17 @@ int infMatInv(double **mat, double **inv, int dim)
 int supMatInv(double **mat, double **inv, int dim)
 {
 	int i, j, k;
-	double multiplier;
+	double multiplier, **aux;
+	if(malloc2ddouble(&aux, dim, dim) != 0)
+	{
+		return -5;
+	}
 	//Initialize I matrix
 	for(i = 0; i < dim; i++)
 	{
 		for(j = 0; j < dim; j++)
 		{
+			aux[i][j] = mat[i][j];
 			if(i == j)
 			{
 				inv[i][j] = 1;
@@ -191,19 +201,19 @@ int supMatInv(double **mat, double **inv, int dim)
 		{
 			if(i == j)
 			{
-				multiplier = mat[i][i];
+				multiplier = aux[i][i];
 				for(k = dim - 1; k >= i; k--)
 				{
-					mat[i][k] /= multiplier;
+					aux[i][k] /= multiplier;
 					inv[i][k] /= multiplier;
 				}
 			}
 			else
 			{
-				multiplier = mat[i][j];
+				multiplier = aux[i][j];
 				for(k = dim - 1; k > i; k--)
 				{
-					mat[i][k] = mat[i][k] - multiplier * mat[j][k];
+					aux[i][k] = aux[i][k] - multiplier * aux[j][k];
 					inv[i][k] = inv[i][k] - multiplier * inv[j][k];
 				}
 			}
@@ -213,7 +223,7 @@ int supMatInv(double **mat, double **inv, int dim)
 	{
 		for(j = dim - 1; j >= 0; j--)
 		{
-			if((i == j && fabs(mat[i][j]-1) > EPS) || (i != j && fabs(mat[i][j]) > EPS))
+			if((i == j && fabs(aux[i][j]-1) > EPS) || (i != j && fabs(aux[i][j]) > EPS))
 			{
 				return -2;
 			}
@@ -304,21 +314,27 @@ double** prodM_DD(double **mat1, int nrL1, int nrC1, double **mat2, int nrL2, in
 			printf("\nThe matrices cannot be multiplied! (nrC(A) != nrL(B))\n");
 		return NULL;
 	}
+	
 	else if(nProcs == 1)
 	{
+		
 		//if(rankL == 0)
 		//{	
 			if(malloc2ddouble(&resultMat, nrL1, nrC2) == 0)
 			{
+				//printMatrixDouble(mat1, nrL1, nrC1);
 				for(i = 0; i < nrL1; i++)
+				{
 					for(j = 0; j < nrC2; j++) 
 					{
-						resultMat[i][j] = 0;
 						for(k = 0; k < nrC1; k++)
 						{
 							resultMat[i][j] += mat1[i][k]*mat2[k][j];
 						}
 					}
+				}
+				//printMatrixDouble(resultMat, nrL1, nrC1);
+				//printf("\nProdus returnat!");
 				return resultMat;		
 			}
 			else
@@ -333,15 +349,13 @@ double** prodM_DD(double **mat1, int nrL1, int nrC1, double **mat2, int nrL2, in
 
 int decompLU(double **mat, double **L, double **U, int **P, int nrL, int nrC, int nrLU, int nrCU, int nrLL, int nrCL, double **diagDiv)
 {
-	//if(nrL != nrC)
-	//{
-	//	return -2;
-	//}
+
 	//Varianta neparalelizata LU = PA dreptunghiular
 	//
 	int i, j, k, a;
 	int lineMaxPivot, dim = nrL;
 	double maxPivot, aux;
+	
 	if(nrL > nrC)
 	{
 		dim = nrC;
@@ -349,13 +363,6 @@ int decompLU(double **mat, double **L, double **U, int **P, int nrL, int nrC, in
 	for(i = 0; i < nrL; i++)
 	{
 		P[i][i] = 1;
-		for(j = 0; j < nrC; j++)
-		{
-			if(i < nrLL && j < nrCL)
-			{
-				L[i][j] = 0;
-			}
-		}
 	}
 	//printf("\nMatricea initiala P:\n");
 	//printMatrixInt(P, nrL, nrL);
@@ -365,6 +372,7 @@ int decompLU(double **mat, double **L, double **U, int **P, int nrL, int nrC, in
 	//printMatrixDouble(U, nrLU, nrCU);
 	//printMatrixDouble(mat, nrL, nrC);
 	
+		
 	for(i = 0; i < dim - 1; i++)
 	{
 		//Get the max value on the 'i' column (pivot value)
@@ -445,6 +453,9 @@ int decompLU(double **mat, double **L, double **U, int **P, int nrL, int nrC, in
 			U[i][j] = mat[i][j];
 		}
 	}
+	
+
+
 	if(nrL > nrC)
 	{
 		lineMaxPivot = nrC - 1;
@@ -500,7 +511,6 @@ int decompLU(double **mat, double **L, double **U, int **P, int nrL, int nrC, in
 		L[nrL-1][nrL-1] = 1;
 		diagDiv[nrL - 1][nrL - 1] = 1/mat[nrL - 1][nrL - 1];
 	}
-	
 	//printf("\nMatricea U:\n");
 	//printMatrixDouble(U, nrLU, nrCU);
 	//printf("\nMatricea L:\n");
@@ -514,7 +524,7 @@ int parallelDecompLU(double **mat, double **L, double **U, int **P, int nrR, int
 	{
 		int res;
 		double start_time, stop_time, **diagDiv;
-		if(malloc2ddouble(&diagDiv, dimR, dimC) != 0)
+		if(malloc2ddouble(&diagDiv, nrR, nrC) != 0)
 		{
 			//Memory allocation error
 			return -5;
@@ -557,7 +567,7 @@ int parallelDecompLU(double **mat, double **L, double **U, int **P, int nrR, int
 		MPI_Request request, requestL, requestP, requestU, requestMC, requestMR;	
 		double start_time, stop_time;
 		int i, j, k, p, q;
-		MPI_Datatype blockType2D;
+		MPI_Datatype blockType2D, blockType2DINT;
 		blocksPerProcess = (int *) calloc(nProcs, sizeof(int));
 		if(blocksPerProcess == NULL)
 		{
@@ -701,10 +711,14 @@ int parallelDecompLU(double **mat, double **L, double **U, int **P, int nrR, int
 							res = decompLU(localBlocks[localIndexOfBlockToProcess], localLBlocks[localIndexOfBlockToProcess], localAux, localPBlocks[localIndexOfBlockToProcess], dimR, dimC, dimR, dimC, dimR, dimC, multiplierC);
 							//printf("\nProcess %d - Matricea L:\n", rankL);
 							//printMatrixDouble(localLBlocks[localIndexOfBlockToProcess], dimR, dimC);
+							if (rankL == 8)
+							{
+								printMatrixDouble(multiplierC, dimR, dimC);
+							}
 							//printMatrixDouble(multiplier, dimR, dimC);
 							//printf("\nProcess %d - Matricea U:\n", rankL);
 							//printMatrixDouble(localAux, dimR, dimC);
-							//printf("\nProcess %d - Matricea U:\n", rankL);
+							//printf("\nProcess %d - Matricea:\n", rankL);
 							//printMatrixDouble(localBlocks[localIndexOfBlockToProcess], dimR, dimC);
 							if(res != 0)
 							{
@@ -756,6 +770,7 @@ int parallelDecompLU(double **mat, double **L, double **U, int **P, int nrR, int
 							//printMatrixDouble(localAux, dimR, dimC);
 							//Computing Linv * P
 							multiplierR = prodM_DI(localAux, dimR, dimC, localPBlocks[localIndexOfBlockToProcess], dimR, dimC, 1);
+							//printMatrixDouble(multiplierR, dimR, dimC); //DE TRIMIS SEPARAT P SI L
 							if(multiplierR == NULL)
 							{
 								//Error in matrix product	
@@ -798,6 +813,7 @@ int parallelDecompLU(double **mat, double **L, double **U, int **P, int nrR, int
 							printf("\nProcess %d: Sending L to process 0...", rankL);
 							//MPI_Isend(&((localLBlocks[localIndexOfBlockToProcess])[0][0]), dimR * dimC, MPI_DOUBLE, 0, tag/10, MPI_COMM_WORLD, &requestL);
 							MPI_Send(&((localLBlocks[localIndexOfBlockToProcess])[0][0]), dimR * dimC, MPI_DOUBLE, 0, tag/10, MPI_COMM_WORLD);
+							//printMatrixDouble(localLBlocks[localIndexOfBlockToProcess], dimR, dimC);
 							//Sending P
 							printf("\nProcess %d: Sending P to process 0...", rankL);
 							//MPI_Isend(&((localPBlocks[localIndexOfBlockToProcess])[0][0]), dimR * dimC, MPI_INT, 0, tag/100, MPI_COMM_WORLD, &requestP);
@@ -894,7 +910,7 @@ int parallelDecompLU(double **mat, double **L, double **U, int **P, int nrR, int
 							//printMatrixDouble(localAux, dimR, dimC);
 							//Computing Linv * P
 							multiplierR = prodM_DI(localAux, dimR, dimC, localP, dimR, dimC, 1);
-
+							//printMatrixDouble(multiplierR, dimR, dimC);
 							if(multiplierR == NULL)
 							{
 								//Error in matrix product
@@ -914,6 +930,7 @@ int parallelDecompLU(double **mat, double **L, double **U, int **P, int nrR, int
 							{
 								//printf("\nProcess %d: Sending multiplier to row process %d...", rankL, processes[i][p]);
 								MPI_Isend(&(multiplierR[0][0]), dimR * dimC, MPI_DOUBLE, processes[i][p], 3, MPI_COMM_WORLD, &requestMR);
+
 							}
 						}	
 						
@@ -954,6 +971,7 @@ int parallelDecompLU(double **mat, double **L, double **U, int **P, int nrR, int
 								}
 							}
 							//MPI_Wait(&request, &status);
+							//printMatrixDouble(multiplierC, dimR, dimC);
 							localAux = prodM_DD(localA, dimR, dimC, multiplierC, dimR, dimC, 1);
 
 							if (localAux == NULL)
@@ -992,8 +1010,10 @@ int parallelDecompLU(double **mat, double **L, double **U, int **P, int nrR, int
 								}
 							}
 
-							localAux = prodM_DD(localLBlocks[localIndexOfBlockToProcess], dimR, dimC, multiplierC, dimR, dimC, 1);
-
+							//printMatrixDouble(localBlocks[localIndexOfBlockToProcess], dimR, dimC);
+							//printMatrixDouble(multiplierC, dimR, dimC);
+							localAux = prodM_DD(localBlocks[localIndexOfBlockToProcess], dimR, dimC, multiplierC, dimR, dimC, 1);
+							//printMatrixDouble(localAux, dimR, dimC);
 							if (localAux == NULL)
 							{
 								//Error in matrix product
@@ -1022,8 +1042,11 @@ int parallelDecompLU(double **mat, double **L, double **U, int **P, int nrR, int
 							//MPI_Isend(&globalIndexOfBlockToProcess, 1, MPI_INT, 0, 101, MPI_COMM_WORLD, &request);
 							MPI_Send(&globalIndexOfBlockToProcess, 1, MPI_INT, 0, 101, MPI_COMM_WORLD);
 							//Sending L
-							//MPI_Isend(&(localAux[0][0]), dimR * dimC, MPI_DOUBLE, 0, globalIndexOfBlockToProcess, MPI_COMM_WORLD, &requestL);
+							
+							//printMatrixDouble(localAux, dimR, dimC);
 							MPI_Send(&(localAux[0][0]), dimR * dimC, MPI_DOUBLE, 0, globalIndexOfBlockToProcess, MPI_COMM_WORLD);	
+							//MPI_Isend(&(localAux[0][0]), dimR * dimC, MPI_DOUBLE, 0, globalIndexOfBlockToProcess, MPI_COMM_WORLD, &requestL);
+							
 							//MPI_Wait(&request, &status);
 							//MPI_Wait(&requestL, &status);
 							printf("\nProcess %d: L block sent to process 0.", rankL);
@@ -1103,8 +1126,8 @@ int parallelDecompLU(double **mat, double **L, double **U, int **P, int nrR, int
 								}
 							}
 
-							localAux = prodM_DD(multiplierR, dimR, dimC, localLBlocks[localIndexOfBlockToProcess], dimR, dimC, 1);
-
+							localAux = prodM_DD(multiplierR, dimR, dimC, localBlocks[localIndexOfBlockToProcess], dimR, dimC, 1);
+							
 							if (localAux == NULL)
 							{
 								//Error in matrix product
@@ -1125,7 +1148,6 @@ int parallelDecompLU(double **mat, double **L, double **U, int **P, int nrR, int
 								free2dint(&processes);
 								return -9;
 							}
-
 							//Sending computed results to main process (0) tag 102, + computed index
 							//Sending computed index
 							//printf("\nProcess %d: Sending info to process 0...", rankL);
@@ -1152,6 +1174,12 @@ int parallelDecompLU(double **mat, double **L, double **U, int **P, int nrR, int
 		//MPI_Barrier(MPI_COMM_WORLD);
 		if(rankL == 0)
 		{	
+			if(MPI_Type_vector(dimR, dimC, nrC, MPI_INT, &blockType2DINT) != 0)
+			{
+			//Cannot create custom MPI type
+			return -7;
+			}	
+			MPI_Type_commit(&blockType2DINT);
 
 			//Getting all results from each process
 			for(i = 0; i < dimRP; i++)
@@ -1173,59 +1201,64 @@ int parallelDecompLU(double **mat, double **L, double **U, int **P, int nrR, int
 						{
 							//Receiving computed 2d block index
 							MPI_Recv(&globalIndexOfBlockToProcess, 1, MPI_INT, processes[i][j], 100, MPI_COMM_WORLD, &status);
-							printf("\n@@@Receiving blocks %d from process %d...", globalIndexOfBlockToProcess, processes[i][j]);
+							//printf("\n@@@Receiving blocks %d from process %d...", globalIndexOfBlockToProcess, processes[i][j]);
 							r = globalIndexOfBlockToProcess / dimCP;
 							c = globalIndexOfBlockToProcess % dimCP;
 							//Receiving computed block of U							
-							//MPI_Recv(&(U[r * dimR][c * dimC]), 1, blockType2D, processes[i][j], globalIndexOfBlockToProcess, MPI_COMM_WORLD, &status);
-							MPI_Recv(&(blockU[0][0]), dimR * dimC, MPI_DOUBLE, processes[i][j], globalIndexOfBlockToProcess, MPI_COMM_WORLD, &status);
-							printMatrixDouble(blockU, dimR, dimC);		
-							printf("\n!!!!U Block %d received from process %d...", globalIndexOfBlockToProcess, processes[i][j]);	
+							MPI_Recv(&(U[r * dimR][c * dimC]), 1, blockType2D, processes[i][j], globalIndexOfBlockToProcess, MPI_COMM_WORLD, &status);
+							//MPI_Recv(&(blockU[0][0]), dimR * dimC, MPI_DOUBLE, processes[i][j], globalIndexOfBlockToProcess, MPI_COMM_WORLD, &status); //OK		
+							//printf("\n!!!!U Block %d received from process %d...", globalIndexOfBlockToProcess, processes[i][j]);	
+							//printMatrixDouble(blockU, dimR, dimC);
 							//Receiving computed block of L							
-							//MPI_Recv(&(L[r * dimR][c * dimC]), 1, blockType2D, processes[i][j], globalIndexOfBlockToProcess/10, MPI_COMM_WORLD, &status);
-							MPI_Recv(&(blockL[0][0]), dimR * dimC, MPI_DOUBLE, processes[i][j], globalIndexOfBlockToProcess/10, MPI_COMM_WORLD, &status);
-							printMatrixDouble(blockL, dimR, dimC);
-							printf("\n!!!!L Block %d received from process %d...", globalIndexOfBlockToProcess, processes[i][j]);
+							MPI_Recv(&(L[r * dimR][c * dimC]), 1, blockType2D, processes[i][j], globalIndexOfBlockToProcess/10, MPI_COMM_WORLD, &status);
+							//MPI_Recv(&(blockL[0][0]), dimR * dimC, MPI_DOUBLE, processes[i][j], globalIndexOfBlockToProcess/10, MPI_COMM_WORLD, &status);//OK
+							//printf("\n!!!!L Block %d received from process %d...", globalIndexOfBlockToProcess, processes[i][j]);
+							//printMatrixDouble(blockL, dimR, dimC);
 							//Receiving computed block of P							
-							//MPI_Recv(&(P[r * dimR][c * dimC]), 1, blockType2D, processes[i][j], globalIndexOfBlockToProcess/100, MPI_COMM_WORLD, &status);
-							MPI_Recv(&(blockP[0][0]), dimR * dimC, MPI_INT, processes[i][j], globalIndexOfBlockToProcess/100, MPI_COMM_WORLD, &status);
-							printMatrixInt(blockP, dimR, dimC);
-							printf("\n!!!!P Block %d received from process %d...", globalIndexOfBlockToProcess, processes[i][j]);
+							MPI_Recv(&(P[r * dimR][c * dimC]), 1, blockType2DINT, processes[i][j], globalIndexOfBlockToProcess/100, MPI_COMM_WORLD, &status);
+							//MPI_Recv(&(blockP[0][0]), dimR * dimC, MPI_INT, processes[i][j], globalIndexOfBlockToProcess/100, MPI_COMM_WORLD, &status); //OK
+							//printf("\n!!!!P Block %d received from process %d...", globalIndexOfBlockToProcess, processes[i][j]);
+							//printMatrixInt(blockP, dimR, dimC);
 						}
-						else if (i < j)
+						else if (i > j)
 						{
-							//Receiving computed 2d block index
-							MPI_Irecv(&globalIndexOfBlockToProcess, 1, MPI_INT, processes[i][j], 101, MPI_COMM_WORLD, &request);
-							//MPI_Recv(&globalIndexOfBlockToProcess, 1, MPI_INT, processes[i][j], 101, MPI_COMM_WORLD, &status);
-							printf("\n@@@ L Receiving block %d from process %d...", globalIndexOfBlockToProcess, processes[i][j]);
+							//Receiving computed 2d block index from column process
+							//MPI_Irecv(&globalIndexOfBlockToProcess, 1, MPI_INT, processes[i][j], 101, MPI_COMM_WORLD, &request);
+							MPI_Recv(&globalIndexOfBlockToProcess, 1, MPI_INT, processes[i][j], 101, MPI_COMM_WORLD, &status);
+							//printf("\n@@@ L Receiving block %d from process %d...", globalIndexOfBlockToProcess, processes[i][j]);
 							r = globalIndexOfBlockToProcess / dimCP;
 							c = globalIndexOfBlockToProcess % dimCP;
 							//Receiving computed block of L							
-							//MPI_Recv(&(L[r * dimR][c * dimC]), 1, blockType2D, processes[i][j], globalIndexOfBlockToProcess, MPI_COMM_WORLD, &status);
-							//MPI_Recv(&(blockL[0][0]), dimR * dimC, MPI_DOUBLE, processes[i][j], globalIndexOfBlockToProcess, MPI_COMM_WORLD, &status);
-							MPI_Irecv(&(blockL[0][0]), dimR * dimC, MPI_DOUBLE, processes[i][j], globalIndexOfBlockToProcess, MPI_COMM_WORLD, &request);
-							printf("\n!!!! L Block %d received from process %d...", globalIndexOfBlockToProcess, processes[i][j]);
+							//MPI_Irecv(&(L[r * dimR][c * dimC]), 1, blockType2D, processes[i][j], globalIndexOfBlockToProcess, MPI_COMM_WORLD, &request);
+							MPI_Recv(&(L[r * dimR][c * dimC]), 1, blockType2D, processes[i][j], globalIndexOfBlockToProcess, MPI_COMM_WORLD, &status);
+							//MPI_Recv(&(blockL[0][0]), dimR * dimC, MPI_DOUBLE, processes[i][j], globalIndexOfBlockToProcess, MPI_COMM_WORLD, &status); //OK
+							//MPI_Irecv(&(blockL[0][0]), dimR * dimC, MPI_DOUBLE, processes[i][j], globalIndexOfBlockToProcess, MPI_COMM_WORLD, &request);
+							//printf("\n!!!! L Block %d received from process %d...", globalIndexOfBlockToProcess, processes[i][j]);
+							//printMatrixDouble(blockL, dimR, dimC);
 						}
 						else
 						{
 							//i > j	
-							//Receiving computed 2d block index
-							//MPI_Recv(&globalIndexOfBlockToProcess, 1, MPI_INT, processes[i][j], 102, MPI_COMM_WORLD, &status);
-							MPI_Irecv(&globalIndexOfBlockToProcess, 1, MPI_INT, processes[i][j], 102, MPI_COMM_WORLD, &request);
-							printf("\n@@@ Receiving U block %d from process %d...", globalIndexOfBlockToProcess, processes[i][j]);
+							//Receiving computed 2d block index from row process
+							MPI_Recv(&globalIndexOfBlockToProcess, 1, MPI_INT, processes[i][j], 102, MPI_COMM_WORLD, &status);
+							//MPI_Irecv(&globalIndexOfBlockToProcess, 1, MPI_INT, processes[i][j], 102, MPI_COMM_WORLD, &request);
+							//printf("\n@@@ Receiving U block %d from process %d...", globalIndexOfBlockToProcess, processes[i][j]);
 							r = globalIndexOfBlockToProcess / dimCP;
 							c = globalIndexOfBlockToProcess % dimCP;
 							//Receiving computed block of U							
-							//MPI_Recv(&(U[r * dimR][c * dimC]), 1, blockType2D, processes[i][j], globalIndexOfBlockToProcess, MPI_COMM_WORLD, &status);
-							//MPI_Recv(&(blockU[0][0]), dimR * dimC, MPI_DOUBLE, processes[i][j], globalIndexOfBlockToProcess, MPI_COMM_WORLD, &status);
-							MPI_Irecv(&(blockU[0][0]), dimR * dimC, MPI_DOUBLE, processes[i][j], globalIndexOfBlockToProcess, MPI_COMM_WORLD, &request);
-							printf("\n!!!! U Block %d received from process %d...", globalIndexOfBlockToProcess, processes[i][j]);
+							MPI_Recv(&(U[r * dimR][c * dimC]), 1, blockType2D, processes[i][j], globalIndexOfBlockToProcess, MPI_COMM_WORLD, &status);
+							//MPI_Irecv(&(U[r * dimR][c * dimC]), 1, blockType2D, processes[i][j], globalIndexOfBlockToProcess, MPI_COMM_WORLD, &request);
+							//MPI_Recv(&(blockU[0][0]), dimR * dimC, MPI_DOUBLE, processes[i][j], globalIndexOfBlockToProcess, MPI_COMM_WORLD, &status); //OK
+							//MPI_Irecv(&(blockU[0][0]), dimR * dimC, MPI_DOUBLE, processes[i][j], globalIndexOfBlockToProcess, MPI_COMM_WORLD, &request); 
+							//printf("\n!!!! U Block %d received from process %d...", globalIndexOfBlockToProcess, processes[i][j]);
+							//printMatrixDouble(blockU, dimR, dimC);
 						}
 					}
 				}
 			}	
 			stop_time = MPI_Wtime();
 			printf("\nRuntime is: %f\n", stop_time - start_time);
+			MPI_Type_free(&blockType2DINT);
 		}
 		else
 		{
@@ -1255,7 +1288,7 @@ int main(int argc, char *argv[])
 	int nProcs, nrL, nrC, i, j, k, nrLU, nrCU, nrLL, nrCL;
 	int rc, numTasks, rank, res, dimR, dimC, PR, PC;
 	FILE *in;
-	double **mat, **U, **L;
+	double **mat, **U, **L, **diagDiv;
 	int **P;
 	//Number of matrix lines
 	nrL = atoi(argv[1]);
@@ -1290,6 +1323,7 @@ int main(int argc, char *argv[])
 	}
 	MPI_Comm_size(MPI_COMM_WORLD,&numTasks);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	
 	if(malloc2ddouble(&mat, nrL, nrC) == 0 && malloc2dint(&P, nrL, nrL) == 0 && malloc2ddouble(&L, nrLL, nrCL) == 0 && malloc2ddouble(&U, nrLU, nrCU) == 0)
 	{
 		if(rank == 0)
@@ -1313,54 +1347,61 @@ int main(int argc, char *argv[])
 			printf("\nProcess %d: File closed...\nThe matrix is:\n", rank);			
 			printMatrixDouble(mat, nrL, nrC);
 		}
-
-		//res = decompLU(mat, L, U, P, nrL, nrC, nrLU, nrCU, nrLL, nrCL	);
-		res = parallelDecompLU(mat, L, U, P, nrL, nrC, nrLU, nrCU, nrLL, nrCL, numTasks, PR, PC, dimR, dimC);
-		if(res == -1)
+		//if(malloc2ddouble(&diagDiv, nrL, nrC) != 0)
+		//{
+		//	printf("\nEroare!!");
+		//}	
+		res = decompLU(mat, L, U, P, nrL, nrC, nrLU, nrCU, nrLL, nrCL, diagDiv);
+		//res = parallelDecompLU(mat, L, U, P, nrL, nrC, nrLU, nrCU, nrLL, nrCL, numTasks, PR, PC, dimR, dimC);
+		if(rank == 0)
 		{
-			printf("\nPivot value too small...\n");
+			if(res == -1)
+			{
+				printf("\nPivot value too small...\n");
+			}
+			else if(res == -2)
+			{
+				printf("\nMatrix is not square...\n");
+			}
+			else if(res == -3)
+			{
+				printf("\nNot sufficient resources for the specified processor grid...\n");
+			}
+			else if(res == -4)
+			{
+				printf("\nFor square matrix the processes grid should also be square...\n");
+			}
+			else if(res == -5)
+			{
+				printf("\nError in memory allocation...\n");
+			}
+			else if(res == -6)
+			{
+				printf("\nProcess grid cannot be matched with the matrix size...\n");
+			}
+			else if(res == -7)
+			{
+				printf("\nCannot create custom MPI type...\n");
+			}
+			else if(res == -8)
+			{
+				printf("\nCannot invert inferior triangular matrix...\n");
+			}
+			else if(res == -9)
+			{
+				printf("\nError in matrix product...\n");
+			}
+			else
+			{
+				printf("\nMatricea L:\n");
+				printMatrixDouble(L, nrLL, nrCL);
+				printf("\nMatricea U:\n");
+				printMatrixDouble(U, nrLU, nrCU);
+				printf("\nMatricea P:\n");
+				printMatrixInt(P, nrL, nrL);
+			}
 		}
-		else if(res == -2)
-		{
-			printf("\nMatrix is not square...\n");
-		}
-		else if(res == -3)
-		{
-			printf("\nNot sufficient resources for the specified processor grid...\n");
-		}
-		else if(res == -4)
-		{
-			printf("\nFor square matrix the processes grid should also be square...\n");
-		}
-		else if(res == -5)
-		{
-			printf("\nError in memory allocation...\n");
-		}
-		else if(res == -6)
-		{
-			printf("\nProcess grid cannot be matched with the matrix size...\n");
-		}
-		else if(res == -7)
-		{
-			printf("\nCannot create custom MPI type...\n");
-		}
-		else if(res == -8)
-		{
-			printf("\nCannot invert inferior triangular matrix...\n");
-		}
-		else if(res == -9)
-		{
-			printf("\nError in matrix product...\n");
-		}
-		else
-		{
-/*			printf("\nMatricea L:\n");*/
-/*			printMatrixDouble(L, nrLL, nrCL);*/
-/*			printf("\nMatricea U:\n");*/
-/*			printMatrixDouble(U, nrLU, nrCU);*/
-/*			printf("\nMatricea P:\n");*/
-/*			printMatrixInt(P, nrL, nrL);*/
-		}
+		
 
 		free2ddouble(&mat);
 		free2dint(&P);
