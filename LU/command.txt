@@ -1,2 +1,12 @@
-mpirun -np 9 ./a.out 9 9 3 3 3 3
-mpirun -np 9 ./a.out 21 21 3 3 3 3
+mpirun -np 9 ./a.out 9 9 3 3 3
+mpirun -np 16 ./a.out 16 16 4 4 4
+mpirun -np 16 ./a.out 20 20 4 4 5
+mpirun -np 9 ./a.out 24 24 3 3 8
+mpirun -np 25 ./a.out 25 25 5 5 5
+mpirun -np 16 ./a.out 100 100 4 4 25
+mpirun -np 25 ./a.out 120 120 5 5 24
+
+nu merge: 
+mpirun -np 9 ./a.out 21 21 3 3 7 (pivot prea mic)
+mpirun -np 25 ./a.out 150 150 5 5 30 (pivot prea mic)
+

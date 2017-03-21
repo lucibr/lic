@@ -427,6 +427,7 @@ int decompLU(double **mat, double ***L, double ***U, int ***P, int nrL, int nrC,
 		if(fabs(maxPivot) <= EPS)
 		{
 			//pivot value to small
+			printf("\n\n Pivot value %f.\n", maxPivot);
 			return -1;
 		}
 		if(i != lineMaxPivot)
@@ -570,6 +571,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 	else if(nrR % dimBlock != 0 || nrC % dimBlock != 0)
 	{
 		//Process grid cannot be matched with the matrix size
+		
 		return -6;
 	}
 	//printf("\nStarted parallel LU!!!\n");
@@ -603,6 +605,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 	}
 	if(malloc2dint(P, nrR, nrR) != 0 || malloc2ddouble(L, *nrRL, *nrCL) != 0 || malloc2ddouble(U, *nrRU, *nrCU) != 0)
 	{	
+		MPI_Abort(MPI_COMM_WORLD, -5);
 		return -5;
 	}
 
@@ -617,6 +620,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 		if(blocksPerProcess == NULL)
 		{
 			//Memory allocation error
+			MPI_Abort(MPI_COMM_WORLD, -5);
 			return -5;
 		}
 		start_time = MPI_Wtime();
@@ -662,8 +666,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 					{
 						if(i+p < dimRP && j+q < dimCP)
 						{
-							//blocksPerProcess[dimRP*dimCP - k - 1]++;
-							//processes[i+p][j+q] = dimRP*dimCP - 1 - k++;
 							blocksPerProcess[k]++;
 							processes[i+p][j+q] = k++;
 						}
@@ -678,6 +680,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 		if(MPI_Type_vector(dimBlock, dimBlock, nrC, MPI_DOUBLE, &blockType2D) != 0)
 		{
 			//Cannot create custom MPI type
+			MPI_Abort(MPI_COMM_WORLD, -7);
 			return -7;
 		}
 		MPI_Type_commit(&blockType2D);
@@ -722,6 +725,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 				if(malloc2ddouble(&(localBlocks[i]), dimBlock, dimBlock) != 0 || malloc2ddouble(&(localLBlocks[i]), dimBlock, dimBlock) != 0 || malloc2dint(&(localPBlocks[i]), dimBlock, dimBlock) != 0)
 				{
 					//Memory allocation error
+					MPI_Abort(MPI_COMM_WORLD, -5);
 					return -5;
 				}
 				MPI_Recv(&((localBlocks[i])[0][0]), dimBlock*dimBlock, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);		
@@ -757,6 +761,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 						free(blocksPerProcess);
 						MPI_Type_free(&blockType2D);
 						free2dint(&processes);
+						MPI_Abort(MPI_COMM_WORLD, -5);
 						return -5;
 					}
 
@@ -812,6 +817,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								MPI_Type_free(&blockType2D);
 								free2dint(&processes);
 								free2dint(&localP);
+								MPI_Abort(MPI_COMM_WORLD, res);
 								return res;
 							}
 							
@@ -836,6 +842,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								MPI_Type_free(&blockType2D);
 								free2dint(&processes);
 								free2dint(&localP);
+								MPI_Abort(MPI_COMM_WORLD, -8);
 								return -8;
 							}
 							//Send to the multiplier to all inferior column processes
@@ -868,6 +875,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								MPI_Type_free(&blockType2D);
 								free2dint(&processes);
 								free2dint(&localP);
+								MPI_Abort(MPI_COMM_WORLD, -8);
 								return -8;
 							}
 
@@ -894,6 +902,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								MPI_Type_free(&blockType2D);
 								free2dint(&processes);
 								free2dint(&localP);
+								MPI_Abort(MPI_COMM_WORLD, -9);
 								return -9;
 							}
 
@@ -952,6 +961,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								MPI_Type_free(&blockType2D);
 								free2dint(&processes);
 								free2dint(&localP);
+								MPI_Abort(MPI_COMM_WORLD, -5);
 								return -5;
 							}
 							for(p = 0; p < dimBlock; p++)
@@ -993,6 +1003,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								MPI_Type_free(&blockType2D);
 								free2dint(&processes);
 								free2dint(&localP);
+								MPI_Abort(MPI_COMM_WORLD, res);
 								return res;
 							}
 
@@ -1028,6 +1039,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								MPI_Type_free(&blockType2D);
 								free2dint(&processes);
 								free2dint(&localP);
+								MPI_Abort(MPI_COMM_WORLD, -8);
 								return -8;
 							}
 
@@ -1055,6 +1067,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								MPI_Type_free(&blockType2D);
 								free2dint(&processes);
 								free2dint(&localP);
+								MPI_Abort(MPI_COMM_WORLD, -8);
 								return -8;
 							}
 							//printMatrixDouble(localAux, dimR, dimC);
@@ -1074,6 +1087,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								MPI_Type_free(&blockType2D);
 								free2dint(&processes);
 								free2dint(&localP);
+								MPI_Abort(MPI_COMM_WORLD, -9);
 								return -9;
 							}
 
@@ -1087,7 +1101,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								}
 								else if(p < j)
 								{
-									printf("\nProcess %d: Sending P to row process %d...", rankL, processes[i][p]);
+									//printf("\nProcess %d: Sending P to row process %d...", rankL, processes[i][p]);
 									//printMatrixInt(localP, dimR, dimC);
 									//MPI_Isend(&(localP[0][0]), dimR * dimC, MPI_INT, processes[i][p], 4, MPI_COMM_WORLD, &requestMR);
 									MPI_Send(&(localP[0][0]), dimBlock * dimBlock, MPI_INT, processes[i][p], 4, MPI_COMM_WORLD);
@@ -1126,6 +1140,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								MPI_Type_free(&blockType2D);
 								free2dint(&processes);
 								free2dint(&localP);
+								MPI_Abort(MPI_COMM_WORLD, -5);
 								return -5;
 							}
 							//Copy the block that will be processed
@@ -1166,12 +1181,13 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								MPI_Type_free(&blockType2D);
 								free2dint(&processes);
 								free2dint(&localP);
+								MPI_Abort(MPI_COMM_WORLD, -9);
 								return -9;
 							}
 							//Send L updateblocks to all processes, to the right, on row i
 							for(p = j+1; p < dimCP; p++)
 							{
-								printf("\nProcess %d: Sending update L block to process %d...", rankL, processes[i][p]);
+								//printf("\nProcess %d: Sending update L block to process %d...", rankL, processes[i][p]);
 								//MPI_Isend(&(localAux[0][0]), dimR * dimC, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD, &requestU);
 								MPI_Send(&(localAux[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD);
 							}
@@ -1196,6 +1212,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								MPI_Type_free(&blockType2D);
 								free2dint(&processes);
 								free2dint(&localP);
+								MPI_Abort(MPI_COMM_WORLD, -9);
 								return -9;
 							}
 							//Copy results into position in the final result container L
@@ -1262,13 +1279,14 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								MPI_Type_free(&blockType2D);
 								free2dint(&processes);
 								free2dint(&localP);
+								MPI_Abort(MPI_COMM_WORLD, -9);
 								return -9;
 							}
 							
 							//Send L updateblocks to all processes, to the right, on row i
 							for(p = j+1; p < dimCP; p++)
 							{
-								printf("\nProcess %d: Sending update L block to process %d...", rankL, processes[i][p]);
+								//printf("\nProcess %d: Sending update L block to process %d...", rankL, processes[i][p]);
 								//MPI_Isend(&(localAux[0][0]), dimR * dimC, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD, &requestU);
 								MPI_Send(&(localAux[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD);
 							}
@@ -1301,6 +1319,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								MPI_Type_free(&blockType2D);
 								free2dint(&processes);
 								free2dint(&localP);
+								MPI_Abort(MPI_COMM_WORLD, -9);
 								return -9;
 							}
 
@@ -1319,7 +1338,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							//MPI_Wait(&request, &status);
 							//MPI_Wait(&requestL, &status);
 							//printf("\nProcess %d: L block sent to process 0.", rankL);
-							//	printf("\n\n\nProcess %d - DONE!!!", rankL);
+							//printf("\n\n\nProcess %d - DONE!!!", rankL);
 						}		
 	
 					}
@@ -1353,6 +1372,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								MPI_Type_free(&blockType2D);
 								free2dint(&processes);
 								free2dint(&localP);
+								MPI_Abort(MPI_COMM_WORLD, -5);
 								return -5;
 							}
 							//Copy the block that will be processed
@@ -1395,12 +1415,13 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								MPI_Type_free(&blockType2D);
 								free2dint(&processes);
 								free2dint(&localP);
+								MPI_Abort(MPI_COMM_WORLD, -9);
 								return -9;
 							}
 							//Send U updateblocks to all processes on column j
 							for(p = i+1; p < dimBlock; p++)
 							{
-								printf("\nProcess %d: Sending update U block to process %d...", rankL, processes[p][j]);
+								//printf("\nProcess %d: Sending update U block to process %d...", rankL, processes[p][j]);
 								//MPI_Isend(&(localAux[0][0]), dimR * dimC, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD, &requestU);
 								MPI_Send(&(localAux[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD);
 							}
@@ -1468,13 +1489,14 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								MPI_Type_free(&blockType2D);
 								free2dint(&processes);
 								free2dint(&localP);
+								MPI_Abort(MPI_COMM_WORLD, -9);
 								return -9;
 							}
 							//printf("\nProcess %d - OKAY", rankL);
 							//Send U updateblocks to all processes on column j
 							for(p = i+1; p < dimRP; p++)
 							{
-								printf("\nProcess %d: Sending update U block to process %d...", rankL, processes[p][j]);
+								//printf("\nProcess %d: Sending update U block to process %d...", rankL, processes[p][j]);
 								//MPI_Isend(&(localAux[0][0]), dimR * dimC, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD, &requestU);
 								MPI_Send(&(localAux[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD);
 								//
@@ -1509,8 +1531,9 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 		{	
 			if(MPI_Type_vector(dimBlock, dimBlock, nrC, MPI_INT, &blockType2DINT) != 0)
 			{
-			//Cannot create custom MPI type
-			return -7;
+				//Cannot create custom MPI type
+				MPI_Abort(MPI_COMM_WORLD, -7);
+				return -7;
 			}	
 			MPI_Type_commit(&blockType2DINT);
 			//Getting all results from each process
@@ -1523,6 +1546,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 				
 					if(malloc2ddouble(&blockU, dimBlock, dimBlock) != 0 || malloc2ddouble(&blockL, dimBlock, dimBlock) != 0 || malloc2dint(&blockP, dimBlock, dimBlock) != 0)
 					{
+						MPI_Abort(MPI_COMM_WORLD, -5);
 						return -5;
 					}
 
@@ -1605,7 +1629,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 				free2dint(&(localPBlocks[i]));
 			}
 		}
-		MPI_Barrier(MPI_COMM_WORLD);
 		free(blocksPerProcess);
 		MPI_Type_free(&blockType2D);
 		free2dint(&processes);
@@ -1678,56 +1701,65 @@ int main(int argc, char *argv[])
 		}
 		//res = decompLU(mat, &L, &U, &P, nrL, nrC, &nrLU, &nrCU, &nrLL, &nrCL);
 		res = parallelDecompLU(mat, &L, &U, &P, nrL, nrC, &nrLU, &nrCU, &nrLL, &nrCL, numTasks, PR, PC, dimBlock);
+		
+		if(res == -1)
+		{
+			printf("\nPivot value too small...\n");
+			//MPI_Abort(MPI_COMM_WORLD, -1);
+		}
+		else if(res == -2)
+		{
+			printf("\nSub-block dimension should be at least 3...\n");
+			//MPI_Abort(MPI_COMM_WORLD, -2);
+		}
+		else if(res == -3)
+		{
+			printf("\nNot sufficient resources for the specified processor grid...\n");
+			//MPI_Abort(MPI_COMM_WORLD, -3);
+		}
+		else if(res == -4)
+		{
+			printf("\nFor square matrix the processes grid should also be square...\n");
+			//MPI_Abort(MPI_COMM_WORLD, -4);
+		}
+		else if(res == -5)
+		{
+			printf("\nError in memory allocation...\n");
+			//MPI_Abort(MPI_COMM_WORLD, -5);
+		}
+		else if(res == -6)
+		{
+			printf("\nProcess grid cannot be matched with the matrix size...\n");
+			//MPI_Abort(MPI_COMM_WORLD, -6);
+		}
+		else if(res == -7)
+		{
+			printf("\nCannot create custom MPI type...\n");
+			//MPI_Abort(MPI_COMM_WORLD);
+		}
+		else if(res == -8)
+		{
+			printf("\nCannot invert inferior triangular matrix...\n");
+			//MPI_Abort(MPI_COMM_WORLD);
+		}
+		else if(res == -9)
+		{
+			printf("\nError in matrix product...\n");
+			//MPI_Abort(MPI_COMM_WORLD);
+		}
 		if(rank == 0)
 		{
-			if(res == -1)
-			{
-				printf("\nPivot value too small...\n");
-			}
-			else if(res == -2)
-			{
-				printf("\nSubblock dimension should be at least 3...\n");
-			}
-			else if(res == -3)
-			{
-				printf("\nNot sufficient resources for the specified processor grid...\n");
-			}
-			else if(res == -4)
-			{
-				printf("\nFor square matrix the processes grid should also be square...\n");
-			}
-			else if(res == -5)
-			{
-				printf("\nError in memory allocation...\n");
-			}
-			else if(res == -6)
-			{
-				printf("\nProcess grid cannot be matched with the matrix size...\n");
-			}
-			else if(res == -7)
-			{
-				printf("\nCannot create custom MPI type...\n");
-			}
-			else if(res == -8)
-			{
-				printf("\nCannot invert inferior triangular matrix...\n");
-			}
-			else if(res == -9)
-			{
-				printf("\nError in matrix product...\n");
-			}
-			else
+			if (res == 0)
 			{
 				printf("\nMatricea L:\n");
 				printMatrixDouble(L, nrLL, nrCL);
 				printf("\nMatricea U:\n");
 				printMatrixDouble(U, nrLU, nrCU);
 				printf("\nMatricea P:\n");
-				printMatrixInt(P, nrL, nrL);
+			    printMatrixInt(P, nrL, nrL);
 			}
 		}
 		
-
 		free2ddouble(&mat);
 
 	}
