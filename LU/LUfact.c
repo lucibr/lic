@@ -620,7 +620,33 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 			return -5;
 		}
 		start_time = MPI_Wtime();
+
+
+		///!!!!!!!!!!!!!!!!!DONT DELETE!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		//Create the processes matrix
+/*		for(p = 0; p < dimRP; p+=PR)*/
+/*		{*/
+/*			for(q = 0; q < dimCP; q+=PC)*/
+/*			{*/
+/*				k = 0;	*/
+/*				for(i = 0; i < PR; i++)*/
+/*				{*/
+/*					while(k % PC != 0)*/
+/*					{*/
+/*						k++;*/
+/*					} */
+/*					for(j = 0; j < PC; j++)*/
+/*					{*/
+/*						if(i+p < dimRP && j+q < dimCP)*/
+/*						{*/
+/*							blocksPerProcess[dimRP*dimCP - k - 1]++;*/
+/*							processes[i+p][j+q] = dimRP*dimCP - 1 - k++;*/
+/*						}*/
+/*					}*/
+/*				}*/
+/*			}*/
+/*		}*/
+		///!!!!!!!!!!!!!!!!!DONT DELETE!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		for(p = 0; p < dimRP; p+=PR)
 		{
 			for(q = 0; q < dimCP; q+=PC)
@@ -636,13 +662,17 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 					{
 						if(i+p < dimRP && j+q < dimCP)
 						{
-							blocksPerProcess[dimRP*dimCP - k - 1]++;
-							processes[i+p][j+q] = dimRP*dimCP - 1 - k++;
+							//blocksPerProcess[dimRP*dimCP - k - 1]++;
+							//processes[i+p][j+q] = dimRP*dimCP - 1 - k++;
+							blocksPerProcess[k]++;
+							processes[i+p][j+q] = k++;
 						}
 					}
 				}
 			}
 		}
+
+
 		//Create MPI custom type in order to distribute to all processes 2D blocks of size dimR x dimC 
 		//int MPI_Type_vector(int rowCount, int columnCount, int nrElemsToJump, MPI_Datatype oldtype, MPI_Datatype *newtype)
 		if(MPI_Type_vector(dimBlock, dimBlock, nrC, MPI_DOUBLE, &blockType2D) != 0)
@@ -664,11 +694,12 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 				for(j = 0; j < dimCP; j++)
 				{
 					//Main process will not send data to itself - communication not needed since it stores the whole matrix
-					if((p = processes[i][j]) != 0)
+					p = processes[i][j];
+					if(p != 0)
 					{
 						int currentBlockIndex = i * dimCP + j;
 						//Send block index
-						//printf("\nProcess %d: Sending block index %d (start offset %d) to process %d...\n", rankL, currentBlockIndex, currentBlockStartOffset, p);
+						//printf("\nProcess %d: Sending block index %d to process %d...\n", rankL, currentBlockIndex, p);
 						MPI_Send(&currentBlockIndex, 1, MPI_INT, p, 1, MPI_COMM_WORLD);
 						//Send block of dimR x dimC size
 						MPI_Isend(&(mat[i * dimBlock][j * dimBlock]), 1, blockType2D, p, 0, MPI_COMM_WORLD, &request);
@@ -1056,7 +1087,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								}
 								else if(p < j)
 								{
-									//printf("\nProcess %d: Sending P to row process %d...", rankL, processes[i][p]);
+									printf("\nProcess %d: Sending P to row process %d...", rankL, processes[i][p]);
 									//printMatrixInt(localP, dimR, dimC);
 									//MPI_Isend(&(localP[0][0]), dimR * dimC, MPI_INT, processes[i][p], 4, MPI_COMM_WORLD, &requestMR);
 									MPI_Send(&(localP[0][0]), dimBlock * dimBlock, MPI_INT, processes[i][p], 4, MPI_COMM_WORLD);
@@ -1138,9 +1169,9 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								return -9;
 							}
 							//Send L updateblocks to all processes, to the right, on row i
-							for(p = j+1; p < dimBlock; p++)
+							for(p = j+1; p < dimCP; p++)
 							{
-								//printf("\nProcess %d: Sending update L block to process %d...", rankL, processes[i][p]);
+								printf("\nProcess %d: Sending update L block to process %d...", rankL, processes[i][p]);
 								//MPI_Isend(&(localAux[0][0]), dimR * dimC, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD, &requestU);
 								MPI_Send(&(localAux[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD);
 							}
@@ -1235,9 +1266,9 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							}
 							
 							//Send L updateblocks to all processes, to the right, on row i
-							for(p = j+1; p < dimBlock; p++)
+							for(p = j+1; p < dimCP; p++)
 							{
-								//printf("\nProcess %d: Sending update L block to process %d...", rankL, processes[i][p]);
+								printf("\nProcess %d: Sending update L block to process %d...", rankL, processes[i][p]);
 								//MPI_Isend(&(localAux[0][0]), dimR * dimC, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD, &requestU);
 								MPI_Send(&(localAux[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD);
 							}
@@ -1369,7 +1400,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							//Send U updateblocks to all processes on column j
 							for(p = i+1; p < dimBlock; p++)
 							{
-								//printf("\nProcess %d: Sending update U block to process %d...", rankL, processes[p][j]);
+								printf("\nProcess %d: Sending update U block to process %d...", rankL, processes[p][j]);
 								//MPI_Isend(&(localAux[0][0]), dimR * dimC, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD, &requestU);
 								MPI_Send(&(localAux[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD);
 							}
@@ -1443,7 +1474,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							//Send U updateblocks to all processes on column j
 							for(p = i+1; p < dimRP; p++)
 							{
-								//printf("\nProcess %d: Sending update U block to process %d...", rankL, processes[p][j]);
+								printf("\nProcess %d: Sending update U block to process %d...", rankL, processes[p][j]);
 								//MPI_Isend(&(localAux[0][0]), dimR * dimC, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD, &requestU);
 								MPI_Send(&(localAux[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD);
 								//
