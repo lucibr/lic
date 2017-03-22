@@ -1,114 +1,18 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "mpi.h"
-#include <omp.h>
 #include <time.h> 
 #include <math.h>
 #include <string.h>
 #include <limits.h>
 
+#include "MPIWrapper.h"
+#include "constants.h"
+#include "memAlloc.h"
+#include "matSum.h"
+#include "matProd.h"
+#include "matInv.h"
 
-#define EPS 0.01  
 
-
-void printVectorInt(int *v, int dim)
-{
-	int i;
-	printf("\n");
-	for(i = 0; i < dim; i++)
-		printf("%d ", v[i]);
-	printf("\n");
-}
-
-void printMatrixInt(int **m, int nrl, int nrc) 
-{
-	int i, j;
-	printf("\n");
-	for(i = 0; i < nrl; i++)
-	{
-		for(j = 0; j < nrc; j++)
-			printf( "%d ", m[i][j]);
-		printf("\n");
-	}
-	printf("\n");
-}
-
-void printMatrixDouble(double **m, int nrl, int nrc) 
-{
-	int i, j;
-	printf("\n");
-	for(i = 0; i < nrl; i++)
-	{
-		for(j = 0; j < nrc; j++)
-			printf( "%.3lf ", m[i][j]);
-		printf("\n");
-	}
-	printf("\n");
-}
-
-int malloc2dint(int ***array, int nrl, int nrc)
-{
-	int i;
-	/* allocate the n*m contiguous items */
-	int *p = (int *)calloc(nrl*nrc, sizeof(int));
-	if(!p)
-		return -1;
-
-	/* allocate the row pointers into the memory */
-	(*array) = (int **)malloc(nrl*sizeof(int*));
-	if(!array)
-	{
-		free(p);
-		return -1;
-	}
-
-	/* set up the pointers into the contiguous memory */
-	for (i=0; i<nrl; i++)
-	       	(*array)[i] = &(p[i*nrc]);
-	return 0;
-}
-
-int free2dint(int ***array)
-{
-	/* free the memory - the first element of the array is at the start */
-	free(&((*array)[0][0]));
-
-	/* free the pointers into the memory */
-	free(*array);
-	return 0;
-}
-
-int malloc2ddouble(double ***array, int nrl, int nrc)
-{
-	int i;
-	/* allocate the n*m contiguous items */
-	double *p = (double *)calloc(nrl*nrc, sizeof(double));
-	if(!p)
-		return -1;
-
-	/* allocate the row pointers into the memory */
-	(*array) = (double **)malloc(nrl*sizeof(double*));
-	if(!array)
-	{
-		free(p);
-		return -1;
-	}
-
-	/* set up the pointers into the contiguous memory */
-	for (i=0; i<nrl; i++)
-	       	(*array)[i] = &(p[i*nrc]);
-	return 0;
-}
-
-int free2ddouble(double ***array)
-{
-	/* free the memory - the first element of the array is at the start */
-	free(&((*array)[0][0]));
-
-	/* free the pointers into the memory */
-	free(*array);
-	return 0;
-}
 
 void printErrorMessage(int errorCode, int MPI_Process_Rank, char* functionName)
 {
@@ -142,256 +46,6 @@ void printErrorMessage(int errorCode, int MPI_Process_Rank, char* functionName)
 			printf("\nProcess %d (function %s): Error in matrix product...\n", MPI_Process_Rank, functionName);
 			break;
 	}
-}
-
-int infMatInv(double **mat, double **inv, int dim)
-{
-	int i, j, k;
-	double multiplier, **aux;
-	if(malloc2ddouble(&aux, dim, dim) != 0)
-	{
-		return -5;
-	}
-	//Initialize I matrix
-	for(i = 0; i < dim; i++)
-	{
-		for(j = 0; j < dim; j++)
-		{
-			aux[i][j] = mat[i][j];
-			if(i == j)
-			{
-				inv[i][j] = 1;
-			}
-			else
-			{
-				inv[i][j] = 0;
-			}
-		}
-	}
-	for(i = 0; i < dim; i++)
-	{
-		for(j = 0; j <= i; j++)
-		{
-			if(i == j)
-			{
-				multiplier = aux[i][i];
-				for(k = 0; k <= i; k++)
-				{
-					aux[i][k] /= multiplier;
-					inv[i][k] /= multiplier;
-				}
-			}
-			else
-			{
-				multiplier = aux[i][j];
-				for(k = 0; k < i; k++)
-				{
-					aux[i][k] = aux[i][k] - multiplier * aux[j][k];
-					inv[i][k] = inv[i][k] - multiplier * inv[j][k];
-				}
-			}
-		}
-	}
-	for(i = 0; i < dim; i++)
-	{
-		for(j = 0; j < dim; j++)
-		{
-			if((i == j && fabs(aux[i][j]-1) > EPS) || (i != j && fabs(aux[i][j]) > EPS))
-			{
-				return -2;
-			}
-		}
-	}
-	return 0;
-}
-
-
-int supMatInv(double **mat, double **inv, int dim)
-{
-	int i, j, k;
-	double multiplier, **aux;
-	if(malloc2ddouble(&aux, dim, dim) != 0)
-	{
-		return -5;
-	}
-	//Initialize I matrix
-	for(i = 0; i < dim; i++)
-	{
-		for(j = 0; j < dim; j++)
-		{
-			aux[i][j] = mat[i][j];
-			if(i == j)
-			{
-				inv[i][j] = 1;
-			}
-			else
-			{
-				inv[i][j] = 0;
-			}
-		}
-	}
-	for(i = dim - 1; i >= 0; i--)
-	{
-		for(j = dim - 1; j >= i; j--)
-		{
-			if(i == j)
-			{
-				multiplier = aux[i][i];
-				for(k = dim - 1; k >= i; k--)
-				{
-					aux[i][k] /= multiplier;
-					inv[i][k] /= multiplier;
-				}
-			}
-			else
-			{
-				multiplier = aux[i][j];
-				for(k = dim - 1; k > i; k--)
-				{
-					aux[i][k] = aux[i][k] - multiplier * aux[j][k];
-					inv[i][k] = inv[i][k] - multiplier * inv[j][k];
-				}
-			}
-		}
-	}
-	for(i = dim - 1; i >= 0; i--)
-	{
-		for(j = dim - 1; j >= 0; j--)
-		{
-			if((i == j && fabs(aux[i][j]-1) > EPS) || (i != j && fabs(aux[i][j]) > EPS))
-			{
-				return -2;
-			}
-		}
-	}
-	return 0;
-}
-
-void difM_DD(double **mat1, double **mat2, int nrR, int nrC)
-{
-	int i, j;
-	for(i = 0; i < nrR; i++)
-	{
-		for (j = 0; j < nrC; j++)
-		{
-			mat1[i][j] -= mat2[i][j];
-		}
-	}
-}
-
-double** prodM_DI(double **mat1, int nrL1, int nrC1, int **mat2, int nrL2, int nrC2, int nProcs)
-{
-	int i, j, k;
-	double **resultMat;
-	if(nrC1 != nrL2)
-	{
-		//if(rankL == 0)
-			printf("\nThe matrices cannot be multiplied! (nrC(A) != nrL(B))\n");
-		return NULL;
-	}
-	else if(nProcs == 1)
-	{
-		//if(rankL == 0)
-		//{	
-			if(malloc2ddouble(&resultMat, nrL1, nrC2) == 0)
-			{
-				for(i = 0; i < nrL1; i++)
-					for(j = 0; j < nrC2; j++) 
-					{
-						resultMat[i][j] = 0;
-						for(k = 0; k < nrC1; k++)
-							resultMat[i][j] += mat1[i][k]*((double)mat2[k][j]);
-					}
-				return resultMat;		
-			}
-			else
-			{
-				//Memory could not be allocated
-				return NULL;
-			}
-		//}
-	}
-	return NULL;
-}
-
-double** prodM_ID(int **mat1, int nrL1, int nrC1, double **mat2, int nrL2, int nrC2, int nProcs)
-{
-	double **resultMat;
-	int i, j, k;
-	if(nrC1 != nrL2)
-	{
-		//if(rankL == 0)
-			printf("\nThe matrices cannot be multiplied! (nrC(A) != nrL(B))\n");
-		return NULL;
-	}
-	else if(nProcs == 1)
-	{
-		//if(rankL == 0)
-		//{	
-			if(malloc2ddouble(&resultMat, nrL1, nrC2) == 0)
-			{
-				for(i = 0; i < nrL1; i++)
-					for(j = 0; j < nrC2; j++) 
-					{
-						resultMat[i][j] = 0;
-						for(k = 0; k < nrC1; k++)
-						{
-							resultMat[i][j] += ((double)mat1[i][k])*mat2[k][j];
-						}
-					}
-				return resultMat;		
-			}
-			else
-			{
-				//Memory could not be allocated
-				return NULL;
-			}
-		//}
-	}
-	return NULL;
-}
-
-double** prodM_DD(double **mat1, int nrL1, int nrC1, double **mat2, int nrL2, int nrC2, int nProcs)
-{
-	double **resultMat;
-	int i, j, k;
-	if(nrC1 != nrL2)
-	{
-		//if(rankL == 0)
-			printf("\nThe matrices cannot be multiplied! (nrC(A) != nrL(B))\n");
-		return NULL;
-	}
-	
-	else if(nProcs == 1)
-	{
-		
-		//if(rankL == 0)
-		//{	
-			if(malloc2ddouble(&resultMat, nrL1, nrC2) == 0)
-			{
-				//printMatrixDouble(mat1, nrL1, nrC1);
-				for(i = 0; i < nrL1; i++)
-				{
-					for(j = 0; j < nrC2; j++) 
-					{
-						for(k = 0; k < nrC1; k++)
-						{
-							resultMat[i][j] += mat1[i][k]*mat2[k][j];
-						}
-					}
-				}
-				//printMatrixDouble(resultMat, nrL1, nrC1);
-				//printf("\nProdus returnat!");
-				return resultMat;		
-			}
-			else
-			{
-				//Memory could not be allocated
-				return NULL;
-			}
-		//}
-	}
-	return NULL;
 }
 
 //allocMemory (input) - inddicates whether memory has been already allocated(1) for results or shoud be allocated inside the function(0)
@@ -791,7 +445,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								{
 									MPI_Recv(&(updateLblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD, &status);
 									MPI_Recv(&(updateUblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD, &status);
-									localAux = prodM_DD(updateLblock, dimBlock, dimBlock, updateUblock, dimBlock, dimBlock, 1);
+									localAux = prodM_DD(updateLblock, dimBlock, dimBlock, updateUblock, dimBlock, dimBlock);
 									difM_DD(localBlocks[localIndexOfBlockToProcess], localAux, dimBlock, dimBlock);
 								}
 							}
@@ -883,7 +537,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							}
 
 							//Computing Linv * P
-							multiplierR = prodM_DI(localAux, dimBlock, dimBlock, localPBlocks[localIndexOfBlockToProcess], dimBlock, dimBlock, 1);
+							multiplierR = prodM_DI(localAux, dimBlock, dimBlock, localPBlocks[localIndexOfBlockToProcess], dimBlock, dimBlock);
 							if(multiplierR == NULL)
 							{
 								//Error in matrix product	
@@ -970,7 +624,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								{
 									MPI_Recv(&(updateLblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD, &status);
 									MPI_Recv(&(updateUblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD, &status);
-									localAux = prodM_DD(updateLblock, dimBlock, dimBlock, updateUblock, dimBlock, dimBlock, 1);
+									localAux = prodM_DD(updateLblock, dimBlock, dimBlock, updateUblock, dimBlock, dimBlock);
 									difM_DD(localA, localAux, dimBlock, dimBlock);
 								}
 							}
@@ -1064,7 +718,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								return -8;
 							}
 							//Computing Linv * P
-							multiplierR = prodM_DI(localAux, dimBlock, dimBlock, localP, dimBlock, dimBlock, 1);
+							multiplierR = prodM_DI(localAux, dimBlock, dimBlock, localP, dimBlock, dimBlock);
 							if(multiplierR == NULL)
 							{
 								//Error in matrix product
@@ -1100,13 +754,11 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 						}
 					}
 
-
-
-
 					else if(i > j)
 					{
 						//This is a column process
 						MPI_Recv(&(multiplierC[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[j][j], 2, MPI_COMM_WORLD, &status);
+
 						if (rankL == 0)
 						{
 							//Process 0 sholud process data taken directly from matrix mat 					
@@ -1142,11 +794,11 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								{
 									MPI_Recv(&(updateLblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD, &status);
 									MPI_Recv(&(updateUblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD, &status);
-									localAux = prodM_DD(updateLblock, dimBlock, dimBlock, updateUblock, dimBlock, dimBlock, 1);
+									localAux = prodM_DD(updateLblock, dimBlock, dimBlock, updateUblock, dimBlock, dimBlock);
 									difM_DD(localA, localAux, dimBlock, dimBlock);
 								}
 							}
-							localAux = prodM_DD(localA, dimBlock, dimBlock, multiplierC, dimBlock, dimBlock, 1);
+							localAux = prodM_DD(localA, dimBlock, dimBlock, multiplierC, dimBlock, dimBlock);
 
 							if (localAux == NULL)
 							{
@@ -1173,8 +825,8 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							}
 							//Receiving P matrix from process on the same line, on the main diagonal
 							MPI_Recv(&(localP[0][0]), dimBlock * dimBlock, MPI_INT, processes[i][i], 4, MPI_COMM_WORLD, &status);
-							
-							localA = prodM_ID(localP, dimBlock, dimBlock, localAux, dimBlock, dimBlock, 1);
+						
+							localA = prodM_ID(localP, dimBlock, dimBlock, localAux, dimBlock, dimBlock);
 
 							if (localA == NULL)
 							{
@@ -1215,18 +867,18 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 									break;
 								}
 							}
-							
+						
 							if (j != 0)
 							{
 								for (p = 0; p < j; p++)
 								{
 									MPI_Recv(&(updateLblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD, &status);
 									MPI_Recv(&(updateUblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD, &status);
-									localAux = prodM_DD(updateLblock, dimBlock, dimBlock, updateUblock, dimBlock, dimBlock, 1);
+									localAux = prodM_DD(updateLblock, dimBlock, dimBlock, updateUblock, dimBlock, dimBlock);
 									difM_DD(localBlocks[localIndexOfBlockToProcess], localAux, dimBlock, dimBlock);
 								}
 							}
-							localAux = prodM_DD(localBlocks[localIndexOfBlockToProcess], dimBlock, dimBlock, multiplierC, dimBlock, dimBlock, 1);
+							localAux = prodM_DD(localBlocks[localIndexOfBlockToProcess], dimBlock, dimBlock, multiplierC, dimBlock, dimBlock);
 							if (localAux == NULL)
 							{
 								//Error in matrix product
@@ -1253,7 +905,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								MPI_Abort(MPI_COMM_WORLD, -9);
 								return -9;
 							}
-							
+						
 							//Send L updateblocks to all processes, to the right, on row i
 							for(p = j+1; p < dimCP; p++)
 							{
@@ -1262,7 +914,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							//Receiving P matrix from process on the same line, on the main diagonal
 							MPI_Recv(&(localP[0][0]), dimBlock * dimBlock, MPI_INT, processes[i][i], 4, MPI_COMM_WORLD, &status);
 
-							localAux = prodM_ID(localP, dimBlock, dimBlock, localAux, dimBlock, dimBlock, 1);
+							localAux = prodM_ID(localP, dimBlock, dimBlock, localAux, dimBlock, dimBlock);
 
 							if (localAux == NULL)
 							{
@@ -1296,7 +948,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							//Sending L
 							MPI_Send(&(localAux[0][0]), dimBlock * dimBlock, MPI_DOUBLE, 0, globalIndexOfBlockToProcess, MPI_COMM_WORLD);	
 						}		
-	
 					}
 
 	
@@ -1305,6 +956,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 					{
 						//i < j -> This is a row process
 						MPI_Recv(&(multiplierR[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[i][i], 3, MPI_COMM_WORLD, &status);
+
 						if (rankL == 0)
 						{
 							//Process 0 sholud process data taken directly from matrix mat 					
@@ -1326,7 +978,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								return -5;
 							}
 							//Copy the block that will be processed
-							
+						
 							for(p = 0; p < dimBlock; p++)
 							{
 								for(q = 0; q < dimBlock; q++)
@@ -1341,12 +993,12 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								{
 									MPI_Recv(&(updateLblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD, &status);
 									MPI_Recv(&(updateUblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD, &status);
-									localAux = prodM_DD(updateLblock, dimBlock, dimBlock, updateUblock, dimBlock, dimBlock, 1);
+									localAux = prodM_DD(updateLblock, dimBlock, dimBlock, updateUblock, dimBlock, dimBlock);
 									difM_DD(localBlocks[localIndexOfBlockToProcess], localAux, dimBlock, dimBlock);
 								}
 							}
-							
-							localAux = prodM_DD(multiplierR, dimBlock, dimBlock, localA, dimBlock, dimBlock, 1);
+						
+							localAux = prodM_DD(multiplierR, dimBlock, dimBlock, localA, dimBlock, dimBlock);
 
 							if (localAux == NULL)
 							{
@@ -1392,20 +1044,20 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 									break;
 								}
 							}
-								
+							
 							if (i != 0)
 							{
 								for (p = 0; p < i; p++)
 								{
 									MPI_Recv(&(updateLblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD, &status);
 									MPI_Recv(&(updateUblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD, &status);
-									localAux = prodM_DD(updateLblock, dimBlock, dimBlock, updateUblock, dimBlock, dimBlock, 1);
+									localAux = prodM_DD(updateLblock, dimBlock, dimBlock, updateUblock, dimBlock, dimBlock);
 									difM_DD(localBlocks[localIndexOfBlockToProcess], localAux, dimBlock, dimBlock);
 								}
 							}
-							
-							localAux = prodM_DD(multiplierR, dimBlock, dimBlock, localBlocks[localIndexOfBlockToProcess], dimBlock, dimBlock, 1);
-							
+						
+							localAux = prodM_DD(multiplierR, dimBlock, dimBlock, localBlocks[localIndexOfBlockToProcess], dimBlock, dimBlock);
+						
 							if (localAux == NULL)
 							{
 								//Error in matrix product
@@ -1538,10 +1190,28 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 int main(int argc, char *argv[])
 {
 	int nProcs, nrL, nrC, i, j, k, nrLU, nrCU, nrLL, nrCL;
-	int rc, numTasks, rank, res, dimBlock, PR, PC;
+	int numTasks, rank, res, dimBlock, PR, PC;
 	FILE *in;
 	double **mat, **U, **L;
 	int **P;
@@ -1569,13 +1239,10 @@ int main(int argc, char *argv[])
 	{
 		nrLU = nrC;
 	}
-	rc = MPI_Init(&argc, &argv);
-	if (rc != MPI_SUCCESS) 
-	{ 
-		printf ("\n\nError starting MPI program. Terminating.\n"); 
-		MPI_Abort(MPI_COMM_WORLD, rc); 
-	}
-	MPI_Comm_size(MPI_COMM_WORLD,&numTasks);
+	MPI_Framework_Init(argc, argv, &numTasks);
+
+
+	
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	
 	if(malloc2ddouble(&mat, nrL, nrC) == 0)
@@ -1621,6 +1288,6 @@ int main(int argc, char *argv[])
 	{
 		printf("\nError in memory allocation...!\n");
 	}
-	MPI_Finalize();
+	MPI_Framework_Stop();
 	return 0;	
 }
