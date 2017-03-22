@@ -13,7 +13,6 @@
 #include "matInv.h"
 
 
-
 void printErrorMessage(int errorCode, int MPI_Process_Rank, char* functionName)
 {
 	switch(errorCode)
@@ -49,14 +48,15 @@ void printErrorMessage(int errorCode, int MPI_Process_Rank, char* functionName)
 }
 
 //allocMemory (input) - inddicates whether memory has been already allocated(1) for results or shoud be allocated inside the function(0)
-int decompLU(double **mat, double ***L, double ***U, int ***P, int nrL, int nrC, int *nrLU, int *nrCU, int *nrLL, int *nrCL, int allocMemory)
+int decompLU(double **mat, double ***L, double ***U, int ***P, int nrL, int nrC, int *nrLU, int *nrCU, int *nrLL, int *nrCL, int allocMemory, double *runtime)
 {
 
 	//Varianta neparalelizata LU = PA dreptunghiular
-	//
+	
 	int i, j, k, a;
 	int lineMaxPivot, dim = nrL;
-	double maxPivot, aux;
+	double maxPivot, aux, start_time, stop_time;
+	start_time = MPI_Wtime();
 	if (allocMemory == 1)
 	{
 		if(nrL == nrC)
@@ -218,6 +218,8 @@ int decompLU(double **mat, double ***L, double ***U, int ***P, int nrL, int nrC,
 	{
 		(*L)[nrL-1][nrL-1] = 1;
 	}
+	stop_time = MPI_Wtime();
+	(*runtime) = stop_time - start_time;
 	return 0;
 }
 
@@ -231,20 +233,12 @@ int decompLU(double **mat, double ***L, double ***U, int ***P, int nrL, int nrC,
 //PR (INTPUT) - numarul liniilor matricii de procese
 //PC (INTPUT) - numarul coloanelor matricii de procese
 //dimBlock (INPUT) - dimensiunea blocului analizat de fiecare proces (matrice patratica)
-int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, int nrC, int *nrRU, int *nrCU, int *nrRL, int *nrCL, int nProcs, int PR, int PC, int dimBlock)
+int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, int nrC, int *nrRU, int *nrCU, int *nrRL, int *nrCL, int nProcs, int PR, int PC, int dimBlock, double *runtime)
 {
 	if(nProcs == 1)
 	{
 		int res;
-		double start_time, stop_time;
-		start_time = MPI_Wtime();
-		res = decompLU(mat, L, U, P, nrR, nrC, nrRU, nrCU, nrRL, nrCL, 1);
-		stop_time = MPI_Wtime();
-		printf("\nMatricea U:\n");
-		printMatrixDouble(*U, *nrRU, *nrCU);
-		printf("\nMatricea L:\n");
-		printMatrixDouble(*L, *nrRL, *nrCL);
-		printf("\nRuntime is: %f\n", stop_time - start_time);
+		res = decompLU(mat, L, U, P, nrR, nrC, nrRU, nrCU, nrRL, nrCL, 1, runtime);
 		return res;
 	}
 	else if(dimBlock < 3)
@@ -304,6 +298,8 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 		double start_time, stop_time;
 		int i, j, k, p, q;
 		MPI_Datatype blockType2D, blockType2DINT;
+
+		start_time = MPI_Wtime();
 		blocksPerProcess = (int *) calloc(nProcs, sizeof(int));
 		if(blocksPerProcess == NULL)
 		{
@@ -312,7 +308,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 			MPI_Abort(MPI_COMM_WORLD, -5);
 			return -5;
 		}
-		start_time = MPI_Wtime();
 
 		for(p = 0; p < dimRP; p+=PR)
 		{
@@ -349,8 +344,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 		MPI_Type_commit(&blockType2D);
 		if(rankL == 0)
 		{
-			printf("\nMatrix of processes:\n");
-			printMatrixInt(processes, dimRP, dimCP);
 			k = 0;
 			for(i = 0; i < dimRP; i++)
 			{
@@ -372,7 +365,8 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 		int *localBlockIdexes,
 				**localPBlocks[blocksPerProcess[rankL]]; //Stores the P values
 		double	**localBlocks[blocksPerProcess[rankL]], //Stores the actual matrix values; after processing will store U values
-				**localLBlocks[blocksPerProcess[rankL]]; //Will store the L values
+				**localLBlocks[blocksPerProcess[rankL]], //Will store the L values
+				dummy;
 		if(rankL != 0)
 		{
 			int nrBlocks = blocksPerProcess[rankL];
@@ -383,6 +377,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 				if(malloc2ddouble(&(localBlocks[i]), dimBlock, dimBlock) != 0 || malloc2ddouble(&(localLBlocks[i]), dimBlock, dimBlock) != 0 || malloc2dint(&(localPBlocks[i]), dimBlock, dimBlock) != 0)
 				{
 					//Memory allocation error
+					free(blocksPerProcess);
 					printErrorMessage(-5, rankL, "malloc\0");
 					MPI_Abort(MPI_COMM_WORLD, -5);
 					return -5;
@@ -451,7 +446,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							}
 							
 							
-							res = decompLU(localBlocks[localIndexOfBlockToProcess], &(localLBlocks[localIndexOfBlockToProcess]), &localAux, &(localPBlocks[localIndexOfBlockToProcess]), dimBlock, dimBlock, &dimBlock, &dimBlock, &dimBlock, &dimBlock, 0);
+							res = decompLU(localBlocks[localIndexOfBlockToProcess], &(localLBlocks[localIndexOfBlockToProcess]), &localAux, &(localPBlocks[localIndexOfBlockToProcess]), dimBlock, dimBlock, &dimBlock, &dimBlock, &dimBlock, &dimBlock, 0, &dummy);
 							if(res != 0)
 							{
 								free2ddouble(&multiplierR);
@@ -629,7 +624,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								}
 							}
 							
-							res = decompLU(localA, &localL, &localAux, &localP, dimBlock, dimBlock, &dimBlock, &dimBlock, &dimBlock, &dimBlock, 0);
+							res = decompLU(localA, &localL, &localAux, &localP, dimBlock, dimBlock, &dimBlock, &dimBlock, &dimBlock, &dimBlock, 0, &dummy);
 
 							if(res != 0)
 							{
@@ -1162,7 +1157,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 				}
 			}	
 			stop_time = MPI_Wtime();
-			printf("\nRuntime is: %f\n", stop_time - start_time);
+			*runtime = stop_time - start_time;
 			MPI_Type_free(&blockType2DINT);
 		}
 		else
@@ -1213,7 +1208,7 @@ int main(int argc, char *argv[])
 	int nProcs, nrL, nrC, i, j, k, nrLU, nrCU, nrLL, nrCL;
 	int numTasks, rank, res, dimBlock, PR, PC;
 	FILE *in;
-	double **mat, **U, **L;
+	double **mat, **U, **L, runtime;
 	int **P;
 	//Number of matrix lines
 	nrL = atoi(argv[1]);
@@ -1263,8 +1258,7 @@ int main(int argc, char *argv[])
 			printf("\nProcess %d: File closed...\nThe matrix is:\n", rank);			
 			printMatrixDouble(mat, nrL, nrC);
 		}
-		//res = decompLU(mat, &L, &U, &P, nrL, nrC, &nrLU, &nrCU, &nrLL, &nrCL);
-		res = parallelDecompLU(mat, &L, &U, &P, nrL, nrC, &nrLU, &nrCU, &nrLL, &nrCL, numTasks, PR, PC, dimBlock);
+		res = parallelDecompLU(mat, &L, &U, &P, nrL, nrC, &nrLU, &nrCU, &nrLL, &nrCL, numTasks, PR, PC, dimBlock, &runtime);
 		if(res < 0)
 		{
 			printErrorMessage(res, rank, "parallelDecompLU\0");
@@ -1279,6 +1273,7 @@ int main(int argc, char *argv[])
 				printMatrixDouble(U, nrLU, nrCU);
 				printf("\nMatricea P:\n");
 			    printMatrixInt(P, nrL, nrL);
+				printf("\n\nTimpul de executie: %f\n", runtime);
 			}
 		}
 		free2ddouble(&mat);
