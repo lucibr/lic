@@ -1,3 +1,6 @@
+#include <stdlib.h>
+#include <stdio.h>
+
 void printVectorInt(int *v, int dim)
 {
 	int i;

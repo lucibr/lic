@@ -1,13 +1,13 @@
-#include <stdio.h>
-#include <stdlib.h>
+//#include <stdio.h>
+//#include <stdlib.h>
 #include <time.h> 
 #include <math.h>
 #include <string.h>
 #include <limits.h>
 
-#include "MPIWrapper.h"
+//#include "MPIWrapper.h"
+//#include "memAlloc.h"
 #include "constants.h"
-#include "memAlloc.h"
 #include "matSum.h"
 #include "matProd.h"
 #include "matInv.h"
@@ -295,7 +295,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 	{
 		MPI_Status status;
 		MPI_Request request, requestL, requestP, requestU, requestMC, requestMR;	
-		double start_time, stop_time;
+		double start_time, stop_time, r;
 		int i, j, k, p, q;
 		MPI_Datatype blockType2D, blockType2DINT;
 
@@ -441,12 +441,12 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 									MPI_Recv(&(updateLblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD, &status);
 									MPI_Recv(&(updateUblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD, &status);
 									localAux = prodM_DD(updateLblock, dimBlock, dimBlock, updateUblock, dimBlock, dimBlock);
-									difM_DD(localBlocks[localIndexOfBlockToProcess], localAux, dimBlock, dimBlock);
+									sumM_DD(localBlocks[localIndexOfBlockToProcess], localAux, 1, -1, dimBlock, dimBlock, &r, &(localBlocks[localIndexOfBlockToProcess]));
 								}
-							}
-							
+							}				
 							
 							res = decompLU(localBlocks[localIndexOfBlockToProcess], &(localLBlocks[localIndexOfBlockToProcess]), &localAux, &(localPBlocks[localIndexOfBlockToProcess]), dimBlock, dimBlock, &dimBlock, &dimBlock, &dimBlock, &dimBlock, 0, &dummy);
+
 							if(res != 0)
 							{
 								free2ddouble(&multiplierR);
@@ -620,7 +620,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 									MPI_Recv(&(updateLblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD, &status);
 									MPI_Recv(&(updateUblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD, &status);
 									localAux = prodM_DD(updateLblock, dimBlock, dimBlock, updateUblock, dimBlock, dimBlock);
-									difM_DD(localA, localAux, dimBlock, dimBlock);
+									sumM_DD(localA, localAux, 1, -1, dimBlock, dimBlock, &r, &(localA));
 								}
 							}
 							
@@ -683,7 +683,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 								MPI_Abort(MPI_COMM_WORLD, -8);
 								return -8;
 							}
-
 							//Send to the multiplier to all inferior column processes
 							for(p = i+1; p < dimCP; p++)
 							{
@@ -790,7 +789,8 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 									MPI_Recv(&(updateLblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD, &status);
 									MPI_Recv(&(updateUblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD, &status);
 									localAux = prodM_DD(updateLblock, dimBlock, dimBlock, updateUblock, dimBlock, dimBlock);
-									difM_DD(localA, localAux, dimBlock, dimBlock);
+									sumM_DD(localA, localAux, 1, -1, dimBlock, dimBlock, &r, &(localA));
+									
 								}
 							}
 							localAux = prodM_DD(localA, dimBlock, dimBlock, multiplierC, dimBlock, dimBlock);
@@ -870,7 +870,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 									MPI_Recv(&(updateLblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD, &status);
 									MPI_Recv(&(updateUblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD, &status);
 									localAux = prodM_DD(updateLblock, dimBlock, dimBlock, updateUblock, dimBlock, dimBlock);
-									difM_DD(localBlocks[localIndexOfBlockToProcess], localAux, dimBlock, dimBlock);
+									sumM_DD(localBlocks[localIndexOfBlockToProcess], localAux, 1, -1, dimBlock, dimBlock, &r, &(localBlocks[localIndexOfBlockToProcess]));
 								}
 							}
 							localAux = prodM_DD(localBlocks[localIndexOfBlockToProcess], dimBlock, dimBlock, multiplierC, dimBlock, dimBlock);
@@ -989,7 +989,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 									MPI_Recv(&(updateLblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD, &status);
 									MPI_Recv(&(updateUblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD, &status);
 									localAux = prodM_DD(updateLblock, dimBlock, dimBlock, updateUblock, dimBlock, dimBlock);
-									difM_DD(localBlocks[localIndexOfBlockToProcess], localAux, dimBlock, dimBlock);
+									sumM_DD(localBlocks[localIndexOfBlockToProcess], localAux, 1, -1, dimBlock, dimBlock, &r, &(localBlocks[localIndexOfBlockToProcess]));
 								}
 							}
 						
@@ -1047,7 +1047,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 									MPI_Recv(&(updateLblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[i][p], 11, MPI_COMM_WORLD, &status);
 									MPI_Recv(&(updateUblock[0][0]), dimBlock * dimBlock, MPI_DOUBLE, processes[p][j], 13, MPI_COMM_WORLD, &status);
 									localAux = prodM_DD(updateLblock, dimBlock, dimBlock, updateUblock, dimBlock, dimBlock);
-									difM_DD(localBlocks[localIndexOfBlockToProcess], localAux, dimBlock, dimBlock);
+									sumM_DD(localBlocks[localIndexOfBlockToProcess], localAux, 1, -1, dimBlock, dimBlock, &r, &(localBlocks[localIndexOfBlockToProcess]));
 								}
 							}
 						
@@ -1205,7 +1205,7 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 
 int main(int argc, char *argv[])
 {
-	int nProcs, nrL, nrC, i, j, k, nrLU, nrCU, nrLL, nrCL;
+	int nrL, nrC, i, j, k, nrLU, nrCU, nrLL, nrCL;
 	int numTasks, rank, res, dimBlock, PR, PC;
 	FILE *in;
 	double **mat, **U, **L, runtime;
@@ -1225,7 +1225,7 @@ int main(int argc, char *argv[])
 	nrLL = nrL;
 	nrCU = nrC;
 	nrCL = nrC;
-	//double mat1[nrL][nrC];
+
 	if(nrL < nrC)
 	{
 		nrCL = nrL;
@@ -1236,8 +1236,6 @@ int main(int argc, char *argv[])
 	}
 	MPI_Framework_Init(argc, argv, &numTasks);
 
-
-	
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	
 	if(malloc2ddouble(&mat, nrL, nrC) == 0)
@@ -1276,8 +1274,16 @@ int main(int argc, char *argv[])
 				printf("\n\nTimpul de executie: %f\n", runtime);
 			}
 		}
-		free2ddouble(&mat);
 
+		res = sumM_DD_P(L, U, 1, 1, nrL, nrC, 1, &runtime, &L);
+
+		if (res == 0 && rank == 0)
+			{
+				printf("\nMatricea U+L:\n");
+				printMatrixDouble(L, nrL, nrC);
+				printf("\n\nTimpul de executie: %f\n", runtime);
+			}
+		free2ddouble(&mat);	
 	}
 	else
 	{
