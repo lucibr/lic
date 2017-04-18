@@ -10,3 +10,12 @@ nu merge:
 mpirun -np 9 ./a.out 21 21 3 3 7 (pivot prea mic)
 mpirun -np 25 ./a.out 150 150 5 5 30 (pivot prea mic)
 
+
+
+
+
+    Ctrl + M           Comment Code
+
+    Shift + Ctrl + M   Uncomment Code
+
+

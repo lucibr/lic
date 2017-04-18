@@ -44,6 +44,13 @@ void printErrorMessage(int errorCode, int MPI_Process_Rank, char* functionName)
 		case -9:
 			printf("\nProcess %d (function %s): Error in matrix product...\n", MPI_Process_Rank, functionName);
 			break;
+		case -10:
+			printf("\nProcess %d (function %s): The matrices cannot be multiplied! (nrC(A) != nrL(B))...\n", MPI_Process_Rank, functionName);
+			break;
+		default:
+			printf("\nProcess %d (function %s): Unknown error...\n", MPI_Process_Rank, functionName);
+			break;
+			
 	}
 }
 
@@ -1203,92 +1210,159 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 
 
 
+
+
 int main(int argc, char *argv[])
 {
-	int nrL, nrC, i, j, k, nrLU, nrCU, nrLL, nrCL;
-	int numTasks, rank, res, dimBlock, PR, PC;
+	int i, j, k, nrL1, nrC1, nrL2, nrC2;
+	int numTasks, rank, status, dimBlock;
 	FILE *in;
-	double **mat, **U, **L, runtime;
-	int **P;
+	double **mat1, **mat2, runtime, ***res;
 	//Number of matrix lines
-	nrL = atoi(argv[1]);
+	nrL1 = atoi(argv[1]);
 	//Number of matrix columns
-	nrC = atoi(argv[2]);
+	nrC1 = atoi(argv[2]);
 	//Number of process grid rows
-	PR = atoi(argv[3]);
+	nrL2 = atoi(argv[3]);
 	//Number of process grid columns
-	PC = atoi(argv[4]);
+	nrC2 = atoi(argv[4]);
 	//Sub-block size
 	dimBlock = atoi(argv[5]);
 
-	nrLU = nrL;
-	nrLL = nrL;
-	nrCU = nrC;
-	nrCL = nrC;
-
-	if(nrL < nrC)
-	{
-		nrCL = nrL;
-	}
-	else
-	{
-		nrLU = nrC;
-	}
 	MPI_Framework_Init(argc, argv, &numTasks);
 
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	
-	if(malloc2ddouble(&mat, nrL, nrC) == 0)
+
+	if(malloc2ddouble(&mat1, nrL1, nrC1) == 0 && malloc2ddouble(&mat2, nrL2, nrC2) == 0)
 	{
 		if(rank == 0)
 		{
 			in = fopen("81.txt", "r");
 
-			for(i = 0; i < nrL; i++)
+			for(i = 0; i < nrL1; i++)
 			{
-				for(j = 0; j < nrC; j++)
+				for(j = 0; j < nrC1; j++)
 				{	
-					k = fscanf(in, "%lf",&mat[i][j]);
+					k = fscanf(in, "%lf",&mat1[i][j]);
 				}
 			}
-			printf("\nProcess %d: Reading done...", rank);
+			printf("\nProcess %d: The matrix 1 is:\n", rank);		
+			printMatrixDouble(mat1, nrL1, nrC1);
+
+
+			for(i = 0; i < nrL2; i++)
+			{
+				for(j = 0; j < nrC2; j++)
+				{	
+					k = fscanf(in, "%lf",&mat2[i][j]);
+				}
+			}
+			printf("\nProcess %d: The matrix 2 is:\n", rank);			
+			printMatrixDouble(mat2, nrL2, nrC2);
+			printf("\nProcess %d: Reading done...Closing file...", rank);
 			fclose(in);
-			printf("\nProcess %d: File closed...\nThe matrix is:\n", rank);			
-			printMatrixDouble(mat, nrL, nrC);
 		}
-		res = parallelDecompLU(mat, &L, &U, &P, nrL, nrC, &nrLU, &nrCU, &nrLL, &nrCL, numTasks, PR, PC, dimBlock, &runtime);
-		if(res < 0)
-		{
-			printErrorMessage(res, rank, "parallelDecompLU\0");
-		}
+		status = parallelProdM_DD(mat1, nrL1, nrC1, mat2, nrL2, nrC2, &runtime, res, numTasks);
 		if(rank == 0)
 		{
-			if (res == 0)
+			if(status == 0)
 			{
-				printf("\nMatricea L:\n");
-				printMatrixDouble(L, nrLL, nrCL);
-				printf("\nMatricea U:\n");
-				printMatrixDouble(U, nrLU, nrCU);
-				printf("\nMatricea P:\n");
-			    printMatrixInt(P, nrL, nrL);
-				printf("\n\nTimpul de executie: %f\n", runtime);
+					printf("\nMatricea rezultat este:\n");
+					printMatrixDouble(*res, nrL1, nrC2);
+					printf("\n\nTimpul de executie: %f\n", runtime);
+			}
+			else
+			{
+				printErrorMessage(status, rank, "main");
 			}
 		}
-
-		res = sumM_DD_P(L, U, 1, 1, nrL, nrC, 1, &runtime, &L);
-
-		if (res == 0 && rank == 0)
-			{
-				printf("\nMatricea U+L:\n");
-				printMatrixDouble(L, nrL, nrC);
-				printf("\n\nTimpul de executie: %f\n", runtime);
-			}
-		free2ddouble(&mat);	
 	}
-	else
-	{
-		printf("\nError in memory allocation...!\n");
-	}
+	
+	//----------------------------- LU main ------------------------------------------
+/*	int nrL, nrC, i, j, k, nrLU, nrCU, nrLL, nrCL;*/
+/*	int numTasks, rank, res, dimBlock, PR, PC;*/
+/*	FILE *in;*/
+/*	double **mat, **U, **L, runtime;*/
+/*	int **P;*/
+/*	//Number of matrix lines*/
+/*	nrL = atoi(argv[1]);*/
+/*	//Number of matrix columns*/
+/*	nrC = atoi(argv[2]);*/
+/*	//Number of process grid rows*/
+/*	PR = atoi(argv[3]);*/
+/*	//Number of process grid columns*/
+/*	PC = atoi(argv[4]);*/
+/*	//Sub-block size*/
+/*	dimBlock = atoi(argv[5]);*/
+
+/*	nrLU = nrL;*/
+/*	nrLL = nrL;*/
+/*	nrCU = nrC;*/
+/*	nrCL = nrC;*/
+
+/*	if(nrL < nrC)*/
+/*	{*/
+/*		nrCL = nrL;*/
+/*	}*/
+/*	else*/
+/*	{*/
+/*		nrLU = nrC;*/
+/*	}*/
+/*	MPI_Framework_Init(argc, argv, &numTasks);*/
+
+/*	MPI_Comm_rank(MPI_COMM_WORLD, &rank);*/
+/*	if(malloc2ddouble(&mat, nrL, nrC) == 0)*/
+/*	{*/
+/*		if(rank == 0)*/
+/*		{*/
+/*			in = fopen("81.txt", "r");*/
+
+/*			for(i = 0; i < nrL; i++)*/
+/*			{*/
+/*				for(j = 0; j < nrC; j++)*/
+/*				{	*/
+/*					k = fscanf(in, "%lf",&mat[i][j]);*/
+/*				}*/
+/*			}*/
+/*			printf("\nProcess %d: Reading done...", rank);*/
+/*			fclose(in);*/
+/*			printf("\nProcess %d: File closed...\nThe matrix is:\n", rank);			*/
+/*			printMatrixDouble(mat, nrL, nrC);*/
+/*		}*/
+/*		res = parallelDecompLU(mat, &L, &U, &P, nrL, nrC, &nrLU, &nrCU, &nrLL, &nrCL, numTasks, PR, PC, dimBlock, &runtime);*/
+/*		if(res < 0)*/
+/*		{*/
+/*			printErrorMessage(res, rank, "parallelDecompLU\0");*/
+/*		}*/
+/*		if(rank == 0)*/
+/*		{*/
+/*			if (res == 0)*/
+/*			{*/
+/*				printf("\nMatricea L:\n");*/
+/*				printMatrixDouble(L, nrLL, nrCL);*/
+/*				printf("\nMatricea U:\n");*/
+/*				printMatrixDouble(U, nrLU, nrCU);*/
+/*				printf("\nMatricea P:\n");*/
+/*			    printMatrixInt(P, nrL, nrL);*/
+/*				printf("\n\nTimpul de executie: %f\n", runtime);*/
+/*			}*/
+/*		}*/
+
+/*		res = sumM_DD_P(L, U, 1, 1, nrL, nrC, 1, &runtime, &L);*/
+
+/*		if (res == 0 && rank == 0)*/
+/*			{*/
+/*				printf("\nMatricea U+L:\n");*/
+/*				printMatrixDouble(L, nrL, nrC);*/
+/*				printf("\n\nTimpul de executie: %f\n", runtime);*/
+/*			}*/
+/*		free2ddouble(&mat);	*/
+/*	}*/
+/*	else*/
+/*	{*/
+/*		printf("\nError in memory allocation...!\n");*/
+/*	}*/
+	//----------------------------- LU main ------------------------------------------
 	MPI_Framework_Stop();
 	return 0;	
 }
