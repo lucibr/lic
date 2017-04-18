@@ -79,19 +79,14 @@ int sumM_DD_P(double **mat1, double **mat2, double f1, double f2, int nrL, int n
 			offsets[i] = (i*nrElem+nrSupElem);
 		}
 	}
-	//printf("\nProcess %d: Scattering...\n", rank);
 	MPI_Bcast(&factor1, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	MPI_Bcast(&factor2, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	MPI_Scatterv(&(mat1[0][0]), toSend, offsets, MPI_DOUBLE, receivedElems1, nrElem + 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	MPI_Scatterv(&(mat2[0][0]), toSend, offsets, MPI_DOUBLE, receivedElems2, nrElem + 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-	//printf("\nProcess %d: Scattering succeeded!\n", rankL);
-	//printf("\nProcess %d - received: ", rankL);
-	//printVector(receivedElems1, toSend[rankL]);
 	for(i = 0; i < toSend[rankL]; i++)
 	{
 		receivedElems1[i] = receivedElems1[i] * factor1 + receivedElems2[i] * factor2;
 	}
-	//printf("\nProcess %d - \nLocal operations finished...\n", rank);
 	if(rankL == 0)
 	{
 		if(malloc2ddouble(result, nrL, nrC) != 0)
