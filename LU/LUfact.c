@@ -1,4 +1,3 @@
-//#include <stdio.h>
 //#include <stdlib.h>
 #include <time.h> 
 #include <math.h>
@@ -8,51 +7,9 @@
 //#include "MPIWrapper.h"
 //#include "memAlloc.h"
 #include "constants.h"
-#include "matSum.h"
+//#include "matSum.h"
 #include "matProd.h"
 #include "matInv.h"
-
-
-void printErrorMessage(int errorCode, int MPI_Process_Rank, char* functionName)
-{
-	switch(errorCode)
-	{
-		case -1:
-			printf("\nProcess %d (function %s): Pivot value too small...\n", MPI_Process_Rank, functionName);
-			break;
-		case -2:
-			printf("\nProcess %d (function %s): Sub-block dimension should be at least 3...\n", MPI_Process_Rank, functionName);
-			break;
-		case -3:
-			printf("\nProcess %d (function %s): Not sufficient resources for the specified processor grid...\n", MPI_Process_Rank, functionName);
-			break;
-		case -4:
-			printf("\nProcess %d (function %s): For square matrix the processes grid should also be square...\n", MPI_Process_Rank, functionName);
-			break;
-		case -5:
-			printf("\nProcess %d (function %s): Error in memory allocation...\n", MPI_Process_Rank, functionName);
-			break;
-		case -6:
-			printf("\nProcess %d (function %s): Process grid cannot be matched with the matrix size...\n", MPI_Process_Rank, functionName);
-			break;
-		case -7:
-			printf("\nProcess %d (function %s): Cannot create custom MPI type...\n", MPI_Process_Rank, functionName);
-			break;
-		case -8:
-			printf("\nProcess %d (function %s): Cannot invert triangular matrix...\n", MPI_Process_Rank, functionName);
-			break;
-		case -9:
-			printf("\nProcess %d (function %s): Error in matrix product...\n", MPI_Process_Rank, functionName);
-			break;
-		case -10:
-			printf("\nProcess %d (function %s): The matrices cannot be multiplied! (nrC(A) != nrL(B))...\n", MPI_Process_Rank, functionName);
-			break;
-		default:
-			printf("\nProcess %d (function %s): Unknown error...\n", MPI_Process_Rank, functionName);
-			break;
-			
-	}
-}
 
 //allocMemory (input) - inddicates whether memory has been already allocated(1) for results or shoud be allocated inside the function(0)
 int decompLU(double **mat, double ***L, double ***U, int ***P, int nrL, int nrC, int *nrLU, int *nrCU, int *nrLL, int *nrCL, int allocMemory, double *runtime)
@@ -1215,19 +1172,25 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 int main(int argc, char *argv[])
 {
 	int i, j, k, nrL1, nrC1, nrL2, nrC2;
-	int numTasks, rank, status, dimBlock;
+	int numTasks, rank, status, dimBlockL1, dimBlockC1, dimBlockL2, dimBlockC2;
 	FILE *in;
 	double **mat1, **mat2, runtime, ***res;
-	//Number of matrix lines
+	//Number of matrix 1 lines
 	nrL1 = atoi(argv[1]);
-	//Number of matrix columns
+	//Number of matrix 1 columns
 	nrC1 = atoi(argv[2]);
-	//Number of process grid rows
+	//Number of matrix 2 lines
 	nrL2 = atoi(argv[3]);
-	//Number of process grid columns
+	//Number of matrix 2 columns
 	nrC2 = atoi(argv[4]);
-	//Sub-block size
-	dimBlock = atoi(argv[5]);
+	//Matrix A Sub-block: number of lines
+	dimBlockL1 = atoi(argv[5]);
+	//Matrix A Sub-block: number of columns
+	dimBlockC1 = atoi(argv[6]);
+	//Matrix B Sub-block: number of lines
+	dimBlockL2 = atoi(argv[7]);
+	//Matrix B Sub-block: number of columns
+	dimBlockC2 = atoi(argv[8]);
 
 	MPI_Framework_Init(argc, argv, &numTasks);
 
@@ -1246,7 +1209,7 @@ int main(int argc, char *argv[])
 					k = fscanf(in, "%lf",&mat1[i][j]);
 				}
 			}
-			printf("\nProcess %d: The matrix 1 is:\n", rank);		
+			//printf("\nProcess %d: The matrix 1 is:\n", rank);		
 			printMatrixDouble(mat1, nrL1, nrC1);
 
 
@@ -1257,12 +1220,12 @@ int main(int argc, char *argv[])
 					k = fscanf(in, "%lf",&mat2[i][j]);
 				}
 			}
-			printf("\nProcess %d: The matrix 2 is:\n", rank);			
+			//printf("\nProcess %d: The matrix 2 is:\n", rank);			
 			printMatrixDouble(mat2, nrL2, nrC2);
 			printf("\nProcess %d: Reading done...Closing file...", rank);
 			fclose(in);
 		}
-		status = parallelProdM_DD(mat1, nrL1, nrC1, mat2, nrL2, nrC2, &runtime, res, numTasks);
+		status = parallelProdM_DD(mat1, nrL1, nrC1, mat2, nrL2, nrC2, &runtime, res, numTasks, dimBlockL1, dimBlockC1, dimBlockL2, dimBlockC2);
 		if(rank == 0)
 		{
 			if(status == 0)
@@ -1273,7 +1236,7 @@ int main(int argc, char *argv[])
 			}
 			else
 			{
-				printErrorMessage(status, rank, "main");
+				printErrorMessage(status, rank, "main\0");
 			}
 		}
 	}

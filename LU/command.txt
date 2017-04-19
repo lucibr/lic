@@ -19,3 +19,5 @@ mpirun -np 25 ./a.out 150 150 5 5 30 (pivot prea mic)
     Shift + Ctrl + M   Uncomment Code
 
 
+inmultire
+mpirun -np 5 ./a.out 400 600 600 400 200 300 300 200 (sist)

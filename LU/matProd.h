@@ -1,10 +1,12 @@
+#include "matSum.h"
+
 double** prodM_DI(double **mat1, int nrL1, int nrC1, int **mat2, int nrL2, int nrC2)
 {
 	int i, j, k;
 	double **resultMat;
 	if(nrC1 != nrL2)
 	{
-		printf("\nThe matrices cannot be multiplied! (nrC(A) != nrL(B))\n");
+		printErrorMessage(-10, 0, "parallelProdM_DD_D\0");
 		return NULL;
 	}
 
@@ -33,7 +35,7 @@ double** prodM_ID(int **mat1, int nrL1, int nrC1, double **mat2, int nrL2, int n
 	int i, j, k;
 	if(nrC1 != nrL2)
 	{
-		printf("\nThe matrices cannot be multiplied! (nrC(A) != nrL(B))\n");
+		printErrorMessage(-10, 0, "parallelProdM_DD_D\0");
 		return NULL;
 	}
 
@@ -64,7 +66,7 @@ double** prodM_DD(double **mat1, int nrL1, int nrC1, double **mat2, int nrL2, in
 	int i, j, k;
 	if(nrC1 != nrL2)
 	{
-		printf("\nThe matrices cannot be multiplied! (nrC(A) != nrL(B))\n");
+		printErrorMessage(-10, 0, "parallelProdM_DD_D\0");
 		return NULL;
 	}
 	
@@ -117,7 +119,7 @@ double** parallelProdM_DD_D(double **mat1, int nrL1, int nrC1, double **mat2, in
 	else if(nrC1 != nrL2)
 	{
 		if(rankL == 0)
-			printf("\nThe matrices cannot be multiplied! (nrC(A) != nrL(B))\n");
+			printErrorMessage(-10, rankL, "parallelProdM_DD_D\0");
 		return NULL;
 	}
 	else
@@ -209,12 +211,8 @@ double** parallelProdM_DD_D(double **mat1, int nrL1, int nrC1, double **mat2, in
 			}
 			//Allocating space for the matrix 1 elements to be received
 			receivedLineElements = (double *) malloc(sizeof(double) * maxNumberOfLines * nrC1);
-			//printf("\nProcess %d: Broadcasting...\n", rankL);
 			//Broadcasting second matrix
 			MPI_Bcast(&(mat2[0][0]), nrL2*nrC2, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-			//printf("\nProcess %d: Broadcast done!\n", rankL);
-
-			//printf("\nProcess %d: Scattering...\n", rankL);
 			MPI_Scatterv(&(mat1[0][0]), recevedLinesNumbers, receivedLineOffsets, MPI_DOUBLE, receivedLineElements, maxNumberOfLines * nrC1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 			//Computing result elements
@@ -228,10 +226,7 @@ double** parallelProdM_DD_D(double **mat1, int nrL1, int nrC1, double **mat2, in
 					elem += receivedLineElements[line_index * nrC1 + k - receivedLineOffsets[rankL]] * mat2[k][column_index];
 				}
 				resultElem[i] = elem;
-				//printf("\n(Process %d):  elem%d%d computed %d", rankL, line_index, column_index, elem);
 			}
-
-			//printf("\nProcess %d - \nLocal operations finished...\n", rank);
 			MPI_Gatherv(resultElem, toGet[rankL], MPI_DOUBLE, &(resultMat[0][0]), toGet, offsets, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 			free(toGet);
@@ -251,24 +246,427 @@ double** parallelProdM_DD_D(double **mat1, int nrL1, int nrC1, double **mat2, in
 	}
 }
 
-int parallelProdM_DD_SIST(double **mat1, int nrL1, int nrC1, double **mat2, int nrL2, int nrC2, double *runtime, double ***result, int nProcs)
+//Implementarea variantei de inmultire paralela a matricilor prin calcul sistolic
+int parallelProdM_DD_SIST(double **mat1, int nrL1, int nrC1, double **mat2, int nrL2, int nrC2, double *runtime, double ***result, int nProcs, int dimBlockL1, int dimBlockC1, int dimBlockL2, int dimBlockC2)
 {
+	int rankL, i, j, nrLB, nrCB, aux, send = 1, receive = 1,
+		**procMatrix; //will store the process rank that will compute the associated product block
+
+	MPI_Status status;
+
+	MPI_Datatype blocK2DM1, //sub-block first matrix
+				 blocK2DM2, //sub-block second matrix
+				 blocK2DR; //sub-block result matrix
+
+	MPI_Comm_rank(MPI_COMM_WORLD, &rankL);
+	
+	if(nrC1 != nrL2)
+	{
+		if(rankL == 0)
+		{
+			printErrorMessage(-10, rankL, "parallelProdM_DD_SIST\0");
+		}
+		return -10;
+	}
+	//Check if the sub-block dimensions can be used
+	// First condition: the actual matrix dimensions should be divisible with the sub-block dimensions
+	if(nrL1 % dimBlockL1 != 0 || nrC1 % dimBlockC1 != 0 || nrL2 % dimBlockL2 != 0 || nrC2 % dimBlockC2 != 0)
+	{
+		if(rankL == 0)
+		{
+			printErrorMessage(-6, rankL, "parallelProdM_DD_SIST\0");
+		}
+		return -6;
+	}
+	//Check if the sub-block dimensions can be used
+	// Second condition: the number of blocks should be the same for both, matrix A and matrix B
+	if(nrL1 / dimBlockL1 != nrL2 / dimBlockL2 || nrC1 / dimBlockC1 != nrC2 / dimBlockC2)
+	{
+		if(rankL == 0)
+		{
+			printErrorMessage(-6, rankL, "parallelProdM_DD_SIST\0");
+		}
+		return -6;
+	}
+	//Check if the sub-block dimensions can be used
+	// Third condition: sufficient processes
+	if((nrL1 / dimBlockL1) * (nrL2 / dimBlockL2) + 1 > nProcs)
+	{
+		if(rankL == 0)
+		{
+			printErrorMessage(-3, rankL, "parallelProdM_DD_SIST\0");
+		}
+		return -3;
+	}
+	nrLB = nrL1/dimBlockL1;
+	nrCB = nrC1/dimBlockC1;
+	//nrLB should be equal to nrCB
+	if(malloc2dint(&procMatrix, nrLB, nrCB) != 0)
+	{	
+		if(rankL == 0)
+		{
+			printErrorMessage(-5, rankL, "parallelProdM_DD_SIST\0");
+		}
+		MPI_Abort(MPI_COMM_WORLD, -5);
+		return -5;
+	}
+	//Fill up the process matrix - process 0 (main process excluded)
+	aux = 1;
+	for(i = 0; i < nrLB; i++)
+	{
+		for(j = 0; j < nrCB; j++)
+		{
+			procMatrix[i][j] = aux++;
+		}
+	}
+
+ 	if(rankL == 0)
+	{
+		//int MPI_Type_vector(int rowCount, int columnCount, int nrElemsToJump, MPI_Datatype oldtype, MPI_Datatype *newtype)
+		//Create MPI custom type for the first matrix sub-block
+		if(MPI_Type_vector(dimBlockL1, dimBlockC1, nrC1, MPI_DOUBLE, &blocK2DM1) != 0)
+		{
+			//Cannot create custom MPI type
+			printErrorMessage(-7, rankL, "MPI_Type_vector - parallelProdM_DD_SIST\0");
+			MPI_Abort(MPI_COMM_WORLD, -7);
+			return -7;
+		}
+		MPI_Type_commit(&blocK2DM1);
+
+		//Create MPI custom type for the second matrix sub-block
+		if(MPI_Type_vector(dimBlockL2, dimBlockC2, nrC2, MPI_DOUBLE, &blocK2DM2) != 0)
+		{
+			//Cannot create custom MPI type
+			printErrorMessage(-7, rankL, "MPI_Type_vector - parallelProdM_DD_SIST\0");
+			MPI_Abort(MPI_COMM_WORLD, -7);
+			return -7;
+		}
+		MPI_Type_commit(&blocK2DM2);
+
+		//The main process will send matrix 1 sub blocks (a column at once) to first column processes and send matrix 2 sub blocks (a row at once) to first row processes; 
+		//The sending process will start with last matrix 1 column respectvely with the last matrix 2 row;
+		//Each process will receive 0 as a sign that the all data was sent;
+				
+		for(i = nrLB - 1; i >= 0; i--)
+		{
+			//Sending pairs: column sub-block from matrix 1 to column process / row sub-block from matrix 2 to row process
+			for(j = 0; j < nrLB; j++)
+			{
+				//Sending continue tag				
+				MPI_Send(&send, 1, MPI_INT, procMatrix[j][0], 1, MPI_COMM_WORLD);
+				
+				//Send block of dimBlockL1 x dimBlockC1 size (line j, column i)
+				MPI_Send(&(mat1[j * dimBlockL1][i * dimBlockC1]), 1, blocK2DM1, procMatrix[j][0], 0, MPI_COMM_WORLD);
+
+				//Sending continue tag				
+				MPI_Send(&send, 1, MPI_INT, procMatrix[0][j], 1, MPI_COMM_WORLD);
+
+				//Send block of dimBlockL1 x dimBlockC1 size (line i, column j)
+				MPI_Send(&(mat2[i * dimBlockL2][j * dimBlockC2]), 1, blocK2DM2, procMatrix[0][j], 0, MPI_COMM_WORLD);
+			}
+		}
+		//Send stop signal
+		send = 0;
+		for(j = 0; j < nrLB; j++)
+		{
+			MPI_Send(&send, 1, MPI_INT, procMatrix[j][0], 1, MPI_COMM_WORLD);
+			MPI_Send(&send, 1, MPI_INT, procMatrix[0][j], 1, MPI_COMM_WORLD);
+		}
+	}
+	else
+	{
+		double **aBlock, **bBlock, **resBlock, **auxBlock, dummyAux;
+		if(malloc2ddouble(&aBlock, dimBlockL1, dimBlockC1) != 0 || malloc2ddouble(&bBlock, dimBlockL2, dimBlockC2) != 0 || malloc2ddouble(&resBlock, dimBlockL1, dimBlockC2) != 0)
+		{
+			if(rankL == 0)
+			{
+				printErrorMessage(-5, rankL, "parallelProdM_DD_SIST\0");
+			}
+			MPI_Abort(MPI_COMM_WORLD, -5);
+			return -5;
+		}
+
+		for(i = 0; i < nrLB; i++)
+		{
+			for(j = 0; j < nrCB; j++)
+			{
+				if(procMatrix[i][j] == rankL)
+				{
+					while(receive == 1)
+					{
+						if(i == 0 && j == 0)
+						{
+							//Receive continue signal
+							MPI_Recv(&receive, 1, MPI_INT, 0, 1, MPI_COMM_WORLD, &status);
+							if(receive == 1)
+							{
+								//Receive A block (from left)
+								MPI_Recv(&(aBlock[0][0]), dimBlockL1 * dimBlockC1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
+							}
+							//Receive continue signal
+							MPI_Recv(&receive, 1, MPI_INT, 0, 1, MPI_COMM_WORLD, &status);
+							if(receive == 1)
+							{
+								//Receive A block (from top)
+								MPI_Recv(&(bBlock[0][0]), dimBlockL2 * dimBlockC2, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
+							}
+							send = receive;
+
+							//Send aBlock to the right process
+							//Sending continue tag				
+							MPI_Send(&send, 1, MPI_INT, procMatrix[i][j+1], 1, MPI_COMM_WORLD);
+							if(send == 1)
+							{
+								//Send block of dimBlockL1 x dimBlockC1 size (line j, column i)
+								MPI_Send(&(aBlock[0][0]), dimBlockL1*dimBlockC1, MPI_DOUBLE, procMatrix[i][j+1], 0, MPI_COMM_WORLD);
+							}
+
+							//Send bBlock to the bottom process
+							MPI_Send(&send, 1, MPI_INT, procMatrix[i+1][j], 1, MPI_COMM_WORLD);
+							if(send == 1)
+							{
+								//Send block of dimBlockL2 x dimBlockC2 size (line j, column i)
+								MPI_Send(&(bBlock[0][0]), dimBlockL2*dimBlockC2, MPI_DOUBLE, procMatrix[i+1][j], 0, MPI_COMM_WORLD);
+							}
+							if(receive == 1)
+							{
+								auxBlock = prodM_DD(aBlock, dimBlockL1, dimBlockC1, bBlock, dimBlockL2, dimBlockC2);
+								if(auxBlock == NULL)
+								{
+									printErrorMessage(-10, rankL, "parallelProdM_DD_SIST\0");
+									MPI_Abort(MPI_COMM_WORLD, -10);
+									return -10;
+								}
+								//sumM_DD(double **mat1, double **mat2, double f1, double f2, int nrL, int nrC, double *runtime, double ***result)
+								if(sumM_DD(resBlock, auxBlock, 1, 1, dimBlockL1, dimBlockC2, &dummyAux, &resBlock) != 0)
+								{
+									printErrorMessage(-100, rankL, "parallelProdM_DD_SIST/sumM_DD\0");
+									MPI_Abort(MPI_COMM_WORLD, -100);
+									return -100;
+								}
+							}
+						}
+						else if(i == 0)
+						{
+							//Receive continue signal
+							MPI_Recv(&receive, 1, MPI_INT, procMatrix[i][j-1], 1, MPI_COMM_WORLD, &status);
+							if(receive == 1)
+							{
+								//Receive A block (from left)
+								MPI_Recv(&(aBlock[0][0]), dimBlockL1 * dimBlockC1, MPI_DOUBLE, procMatrix[i][j-1], 0, MPI_COMM_WORLD, &status);
+							}
+							//Receive continue signal
+							MPI_Recv(&receive, 1, MPI_INT, 0, 1, MPI_COMM_WORLD, &status);
+							if(receive == 1)
+							{
+								//Receive A block (from top)
+								MPI_Recv(&(bBlock[0][0]), dimBlockL2 * dimBlockC2, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
+							}
+							send = receive;
+
+							//Send aBlock to the right process (if this is not the last process on the current process row)
+							if(j+1 < nrCB)
+							{
+								//Sending continue tag				
+								MPI_Send(&send, 1, MPI_INT, procMatrix[i][j+1], 1, MPI_COMM_WORLD);
+								if(send == 1)
+								{
+									//Send block of dimBlockL1 x dimBlockC1 size (line j, column i)
+									MPI_Send(&(aBlock[0][0]), dimBlockL1*dimBlockC1, MPI_DOUBLE, procMatrix[i][j+1], 0, MPI_COMM_WORLD);
+								}
+							}
+
+							//Send bBlock to the bottom process
+							MPI_Send(&send, 1, MPI_INT, procMatrix[i+1][j], 1, MPI_COMM_WORLD);
+							if(send == 1)
+							{
+								//Send block of dimBlockL2 x dimBlockC2 size (line j, column i)
+								MPI_Send(&(bBlock[0][0]), dimBlockL2*dimBlockC2, MPI_DOUBLE, procMatrix[i+1][j], 0, MPI_COMM_WORLD);
+							}
+							if(receive == 1)
+							{
+								auxBlock = prodM_DD(aBlock, dimBlockL1, dimBlockC1, bBlock, dimBlockL2, dimBlockC2);
+								if(auxBlock == NULL)
+								{
+									printErrorMessage(-10, rankL, "parallelProdM_DD_SIST\0");
+									MPI_Abort(MPI_COMM_WORLD, -10);
+									return -10;
+								}
+								//sumM_DD(double **mat1, double **mat2, double f1, double f2, int nrL, int nrC, double *runtime, double ***result)
+								if(sumM_DD(resBlock, auxBlock, 1, 1, dimBlockL1, dimBlockC2, &dummyAux, &resBlock) != 0)
+								{
+									printErrorMessage(-100, rankL, "parallelProdM_DD_SIST/sumM_DD\0");
+									MPI_Abort(MPI_COMM_WORLD, -100);
+									return -100;
+								}
+							}
+						}
+						else if(j == 0)
+						{
+							//Receive continue signal
+							MPI_Recv(&receive, 1, MPI_INT, 0, 1, MPI_COMM_WORLD, &status);
+							if(receive == 1)
+							{
+								//Receive A block (from left)
+								MPI_Recv(&(aBlock[0][0]), dimBlockL1 * dimBlockC1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
+							}
+							//Receive continue signal
+							MPI_Recv(&receive, 1, MPI_INT, procMatrix[i-1][j], 1, MPI_COMM_WORLD, &status);	
+							if(receive == 1)
+							{
+								//Receive A block (from top)
+								MPI_Recv(&(bBlock[0][0]), dimBlockL2 * dimBlockC2, MPI_DOUBLE, procMatrix[i-1][j], 0, MPI_COMM_WORLD, &status);
+							}
+							send = receive;
+
+							//Send aBlock to the right process
+							//Sending continue tag				
+							MPI_Send(&send, 1, MPI_INT, procMatrix[i][j+1], 1, MPI_COMM_WORLD);
+							if(send == 1)
+							{
+								//Send block of dimBlockL1 x dimBlockC1 size (line j, column i)
+								MPI_Send(&(aBlock[0][0]), dimBlockL1*dimBlockC1, MPI_DOUBLE, procMatrix[i][j+1], 0, MPI_COMM_WORLD);
+							}
+
+							//Send bBlock to the bottom process (if the current process is not already the last on the current process column)
+							if(i+1 < nrLB)
+							{
+								MPI_Send(&send, 1, MPI_INT, procMatrix[i+1][j], 1, MPI_COMM_WORLD);
+								if(send == 1)
+								{
+									//Send block of dimBlockL2 x dimBlockC2 size (line j, column i)
+									MPI_Send(&(bBlock[0][0]), dimBlockL2*dimBlockC2, MPI_DOUBLE, procMatrix[i+1][j], 0, MPI_COMM_WORLD);
+								}
+							}
+							if(receive == 1)
+							{
+								auxBlock = prodM_DD(aBlock, dimBlockL1, dimBlockC1, bBlock, dimBlockL2, dimBlockC2);
+								if(auxBlock == NULL)
+								{
+									printErrorMessage(-10, rankL, "parallelProdM_DD_SIST\0");
+									MPI_Abort(MPI_COMM_WORLD, -10);
+									return -10;
+								}
+								//sumM_DD(double **mat1, double **mat2, double f1, double f2, int nrL, int nrC, double *runtime, double ***result)
+								if(sumM_DD(resBlock, auxBlock, 1, 1, dimBlockL1, dimBlockC2, &dummyAux, &resBlock) != 0)
+								{
+									printErrorMessage(-100, rankL, "parallelProdM_DD_SIST/sumM_DD\0");
+									MPI_Abort(MPI_COMM_WORLD, -100);
+									return -100;
+								}
+							}
+						}
+						else
+						{
+							//Receive continue signal
+							MPI_Recv(&receive, 1, MPI_INT, procMatrix[i][j-1], 1, MPI_COMM_WORLD, &status);
+							if(receive == 1)
+							{
+								//Receive A block (from left)
+								MPI_Recv(&(aBlock[0][0]), dimBlockL1 * dimBlockC1, MPI_DOUBLE, procMatrix[i][j-1], 0, MPI_COMM_WORLD, &status);
+							}
+							//Receive continue signal
+							MPI_Recv(&receive, 1, MPI_INT, procMatrix[i-1][j], 1, MPI_COMM_WORLD, &status);
+							
+							if(receive == 1)
+							{
+								//Receive A block (from top)
+								MPI_Recv(&(bBlock[0][0]), dimBlockL2 * dimBlockC2, MPI_DOUBLE, procMatrix[i-1][j], 0, MPI_COMM_WORLD, &status);
+							}
+							send = receive;
+
+							//Send aBlock to the right process (if the current process is not already the last process on the current process row)
+							if(j+1 < nrCB)
+							{
+								//Sending continue tag				
+								MPI_Send(&send, 1, MPI_INT, procMatrix[i][j+1], 1, MPI_COMM_WORLD);
+								if(send == 1)
+								{
+									//Send block of dimBlockL1 x dimBlockC1 size (line j, column i)
+									MPI_Send(&(aBlock[0][0]), dimBlockL1*dimBlockC1, MPI_DOUBLE, procMatrix[i][j+1], 0, MPI_COMM_WORLD);
+								}
+							}
+
+							//Send bBlock to the bottom process (if the current process is not already the last on the current process column)
+							if(i+1 < nrLB)
+							{
+								MPI_Send(&send, 1, MPI_INT, procMatrix[i+1][j], 1, MPI_COMM_WORLD);
+								if(send == 1)
+								{
+									//Send block of dimBlockL2 x dimBlockC2 size (line j, column i)
+									MPI_Send(&(bBlock[0][0]), dimBlockL2*dimBlockC2, MPI_DOUBLE, procMatrix[i+1][j], 0, MPI_COMM_WORLD);
+								}
+							}
+							if(receive == 1)
+							{
+								auxBlock = prodM_DD(aBlock, dimBlockL1, dimBlockC1, bBlock, dimBlockL2, dimBlockC2);
+								if(auxBlock == NULL)
+								{
+									printErrorMessage(-10, rankL, "parallelProdM_DD_SIST\0");
+									MPI_Abort(MPI_COMM_WORLD, -10);
+									return -10;
+								}
+								//sumM_DD(double **mat1, double **mat2, double f1, double f2, int nrL, int nrC, double *runtime, double ***result)
+								if(sumM_DD(resBlock, auxBlock, 1, 1, dimBlockL1, dimBlockC2, &dummyAux, &resBlock) != 0)
+								{
+									printErrorMessage(-100, rankL, "parallelProdM_DD_SIST/sumM_DD\0");
+									MPI_Abort(MPI_COMM_WORLD, -100);
+									return -100;
+								}
+							}
+						}
+					}
+					MPI_Send(&(resBlock[0][0]), dimBlockL1*dimBlockC2, MPI_DOUBLE, 0, 1000, MPI_COMM_WORLD);
+					return 0;
+				}
+			}
+		}
+
+	}
+	
+	//Receive the processed info into result matrix
+	if(rankL == 0)
+	{
+		if(MPI_Type_vector(dimBlockL1, dimBlockC2, nrC2, MPI_DOUBLE, &blocK2DR) != 0)
+		{
+			//Cannot create custom MPI type
+			printErrorMessage(-7, rankL, "MPI_Type_vector - parallelProdM_DD_SIST\0");
+			MPI_Abort(MPI_COMM_WORLD, -7);
+			return -7;
+		}
+		MPI_Type_commit(&blocK2DR);
+
+		for(i = 0; i < nrLB; i++)
+		{
+			for(j = 0; j < nrCB; j++)
+			{
+				MPI_Recv(&((*result)[i * dimBlockL1][j * dimBlockC2]), 1, blocK2DR, procMatrix[i][j], 1000, MPI_COMM_WORLD, &status);
+			}
+		}
+
+		MPI_Type_free(&blocK2DR);
+		MPI_Type_free(&blocK2DM1);
+		MPI_Type_free(&blocK2DM2);
+		return 0;
+	}
 	return 0;
 }
 
-int parallelProdM_DD(double **mat1, int nrL1, int nrC1, double **mat2, int nrL2, int nrC2, double *runtime, double ***result, int nProcs)
+int parallelProdM_DD(double **mat1, int nrL1, int nrC1, double **mat2, int nrL2, int nrC2, double *runtime, double ***result, int nProcs, int dimBlockL1, int dimBlockC1, int dimBlockL2, int dimBlockC2)
 {
-	int rankL;
+	int rankL, res;
 	double start_time, stop_time;
 
 	MPI_Comm_rank(MPI_COMM_WORLD, &rankL);
 	
 	if(nrC1 != nrL2)
 	{
+		printErrorMessage(-10, rankL, "parallelProdM_DD\0");
 		return -10;
 	}
 	else if(malloc2ddouble(result, nrL1, nrC2) != 0)
 	{	
+		printErrorMessage(-5, rankL, "parallelProdM_DD\0");
 		MPI_Abort(MPI_COMM_WORLD, -5);
 		return -5;
 	}
@@ -278,6 +676,7 @@ int parallelProdM_DD(double **mat1, int nrL1, int nrC1, double **mat2, int nrL2,
 		*result =  prodM_DD(mat1, nrL1, nrC1, mat2, nrL2, nrC2);
 		if(*result == NULL)
 		{
+			printErrorMessage(-100, rankL, "parallelProdM_DD\0");
 			return -100;
 		}
 		stop_time = MPI_Wtime();
@@ -287,14 +686,25 @@ int parallelProdM_DD(double **mat1, int nrL1, int nrC1, double **mat2, int nrL2,
 	else
 	{
 		start_time = MPI_Wtime();
-		*result =  parallelProdM_DD_D(mat1, nrL1, nrC1, mat2, nrL2, nrC2, nProcs);
-		if(*result == NULL)
-		{
-			return -100;
-		}
+		res = parallelProdM_DD_SIST(mat1, nrL1, nrC1, mat2, nrL2, nrC2, runtime, result, nProcs, dimBlockL1, dimBlockC1, dimBlockL2, dimBlockC2);
 		stop_time = MPI_Wtime();
 		*runtime = stop_time - start_time;
-		return 0;
+		if(res == 0)
+		{
+			return 0;
+		}
+		else
+		{
+			start_time = MPI_Wtime();
+			*result =  parallelProdM_DD_D(mat1, nrL1, nrC1, mat2, nrL2, nrC2, nProcs);
+			if(*result == NULL)
+			{
+				printErrorMessage(-100, rankL, "parallelProdM_DD\0");
+				return -100;
+			}
+			stop_time = MPI_Wtime();
+			*runtime = stop_time - start_time;
+			return 0;
+		}
 	}
-	return 0;
 }
