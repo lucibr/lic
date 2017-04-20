@@ -10,6 +10,15 @@ void printVectorInt(int *v, int dim)
 	printf("\n");
 }
 
+void printVectorDouble(double *v, int dim)
+{
+	int i;
+	printf("\n");
+	for(i = 0; i < dim; i++)
+		printf("%.3lf ", v[i]);
+	printf("\n");
+}
+
 void printMatrixInt(int **m, int nrl, int nrc) 
 {
 	int i, j;

@@ -36,6 +36,12 @@ void printErrorMessage(int errorCode, int MPI_Process_Rank, char* functionName)
 		case -10:
 			printf("\nProcess %d (function %s): The matrices cannot be multiplied! (nrC(A) != nrL(B))...\n", MPI_Process_Rank, functionName);
 			break;
+		case -11:
+			printf("\nProcess %d (function %s): Cannot create MPI group...\n", MPI_Process_Rank, functionName);
+			break;
+		case -12:
+			printf("\nProcess %d (function %s): Cannot create MPI communicator...\n", MPI_Process_Rank, functionName);
+			break;
 		default:
 			printf("\nProcess %d (function %s): Unknown error...\n", MPI_Process_Rank, functionName);
 			break;

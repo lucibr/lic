@@ -708,3 +708,153 @@ int parallelProdM_DD(double **mat1, int nrL1, int nrC1, double **mat2, int nrL2,
 		}
 	}
 }
+
+int prodMV_DD_S(double** mat, int nrL, int nrC, double *v, int dim, double **result)
+{
+	int i, j;
+	if(nrC != dim)
+		return -10;
+	*result = (double *)calloc(nrL, sizeof(double));
+	if(!result)
+		return -5;
+	for(i = 0; i < nrL; i++)
+	{
+		for(j = 0; j < nrC; j++)
+		{
+			(*result)[i] += (mat[i][j]*v[j]);
+		}
+	}
+	return 0;
+}
+
+//Pipeline implementation
+int parallelProdMV_DD(double **mat, int nrL, int nrC, double *v, int dim, double **result, double *runtime, int nProcs)
+{
+	int i, j, rankL, nrElem, nrSupElem, 
+		*offsets, //will store the offsets from where elements of the vector line will be sent to the pipeline processes
+		*toGet; //will store the number of elements to be  sent to each process
+
+	double  start_time, stop_time, localSum,
+			*receivedVectorElements, //will store the vector elements
+			*receivedMatrixElements; //will store the matrix line elements (will change a number of times equal with the number of matrix lines)
+
+	//The parallel code begins here
+	start_time = MPI_Wtime();
+
+	MPI_Comm_rank(MPI_COMM_WORLD, &rankL);
+
+	//Array will keep the number of elements to be computed by each process
+	toGet = (int *) malloc(sizeof(int) * nProcs);
+	//Array will keep the offsets relative to elements container address
+	offsets = (int *) malloc(sizeof(int) * nProcs);
+
+	nrElem = nrC / (nProcs - 1);	
+	nrSupElem = nrC % (nProcs - 1);
+	//Defining offsets and number of elements to be sent to each process (information is available in every process)	
+	for(i = 0; i < nProcs; i++)
+	{
+		//For a distribution as balanced as possible, for the first processes a supplementary elem is considered
+		//Normaly, each process will process elements
+		if(i == 0)
+		{
+			toGet[i] = 0;
+		}
+		else if(i <= nrSupElem)
+		{
+			//Send nrElem + 1
+			toGet[i] = nrElem + 1;
+		}
+		else
+		{
+			//Send nrElem
+			toGet[i] = nrElem;
+		}
+		//For rank o process elements are taken starting with index (offset) 0
+		if(i == 0 || i == 1)
+		{
+			offsets[i] = 0;
+		}
+		else if(i <= nrSupElem )
+		{
+			offsets[i] = (i*nrElem+nrSupElem-i);
+		}
+		else
+		{
+			offsets[i] = (i*nrElem+nrSupElem)-1;
+		}
+	}
+	//Alocating space to store the vector elements 
+	receivedVectorElements = (double *) malloc(sizeof(double) * toGet[rankL]);
+	//Alocating space to store the matrix line elements 
+	receivedMatrixElements = (double *) malloc(sizeof(double) * toGet[rankL]);
+
+	if(rankL == 0)
+	{
+		*result = (double *)calloc(nrL, sizeof(double));
+		if(!result)
+		{
+			printErrorMessage(-5, rankL, "parallelProdMV_DD\0");
+			MPI_Abort(MPI_COMM_WORLD, -5);
+			return -5;
+		}
+	}
+
+	if(rankL != 0)
+	{
+		if(malloc2ddouble(&mat, nrL, 1) != 0)
+		{
+			printErrorMessage(-5, rankL, "parallelProdMV_DD\0");
+			MPI_Abort(MPI_COMM_WORLD, -5);
+			return -5;
+		}
+	}
+
+	//Scattring the vector elements to all processes except the main process (rank 0)
+	MPI_Scatterv(&(v[0]), toGet, offsets, MPI_DOUBLE, receivedVectorElements, toGet[rankL], MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	for(i = 0; i < nrL; i++)
+	{
+		//Scattring the matrix elements to all processes except the main process (rank 0)
+		MPI_Scatterv(&(mat[i][0]), toGet, offsets, MPI_DOUBLE, receivedMatrixElements, toGet[rankL], MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+		localSum = 0;
+		if(rankL != 0)
+		{			
+			for(j = 0; j < toGet[rankL]; j++)
+			{			
+				localSum += (receivedVectorElements[j] * receivedMatrixElements[j]);
+			}
+		}
+		MPI_Reduce(&localSum, &((*result)[i]), 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+	}
+	stop_time = MPI_Wtime();
+	*runtime = stop_time - start_time;
+	return 0;
+}
+
+int prodMV_DD(double** mat, int nrL, int nrC, double *v, int dim, double **result, double *runtime, int nProcs)
+{
+	int rankL, res;
+	double start_time, stop_time;
+
+	MPI_Comm_rank(MPI_COMM_WORLD, &rankL);
+	if(nrC != dim)
+	{
+		printErrorMessage(-10, rankL, "parallelProdM_DD\0");
+		return -10;
+	}
+	if(nProcs == 1 || nProcs == 2)
+	{
+		if(rankL == 0)
+		{
+			start_time = MPI_Wtime();
+			res = prodMV_DD_S(mat, nrL, nrC, v, dim, result);
+			stop_time = MPI_Wtime();
+			*runtime = stop_time - start_time;
+		}
+		return res;
+	}
+	else
+	{
+		return parallelProdMV_DD(mat, nrL, nrC, v, dim, result, runtime, nProcs);
+	}
+}
