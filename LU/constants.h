@@ -42,6 +42,9 @@ void printErrorMessage(int errorCode, int MPI_Process_Rank, char* functionName)
 		case -12:
 			printf("\nProcess %d (function %s): Cannot create MPI communicator...\n", MPI_Process_Rank, functionName);
 			break;
+		case -13:
+			printf("\nProcess %d (function %s): Incorrectly defined system...\n", MPI_Process_Rank, functionName);
+			break;
 		default:
 			printf("\nProcess %d (function %s): Unknown error...\n", MPI_Process_Rank, functionName);
 			break;

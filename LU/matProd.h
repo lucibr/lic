@@ -262,40 +262,24 @@ int parallelProdM_DD_SIST(double **mat1, int nrL1, int nrC1, double **mat2, int 
 	
 	if(nrC1 != nrL2)
 	{
-		if(rankL == 0)
-		{
-			printErrorMessage(-10, rankL, "parallelProdM_DD_SIST\0");
-		}
 		return -10;
 	}
 	//Check if the sub-block dimensions can be used
 	// First condition: the actual matrix dimensions should be divisible with the sub-block dimensions
 	if(nrL1 % dimBlockL1 != 0 || nrC1 % dimBlockC1 != 0 || nrL2 % dimBlockL2 != 0 || nrC2 % dimBlockC2 != 0)
 	{
-		if(rankL == 0)
-		{
-			printErrorMessage(-6, rankL, "parallelProdM_DD_SIST\0");
-		}
 		return -6;
 	}
 	//Check if the sub-block dimensions can be used
 	// Second condition: the number of blocks should be the same for both, matrix A and matrix B
 	if(nrL1 / dimBlockL1 != nrL2 / dimBlockL2 || nrC1 / dimBlockC1 != nrC2 / dimBlockC2)
 	{
-		if(rankL == 0)
-		{
-			printErrorMessage(-6, rankL, "parallelProdM_DD_SIST\0");
-		}
 		return -6;
 	}
 	//Check if the sub-block dimensions can be used
 	// Third condition: sufficient processes
 	if((nrL1 / dimBlockL1) * (nrL2 / dimBlockL2) + 1 > nProcs)
 	{
-		if(rankL == 0)
-		{
-			printErrorMessage(-3, rankL, "parallelProdM_DD_SIST\0");
-		}
 		return -3;
 	}
 	nrLB = nrL1/dimBlockL1;
@@ -643,7 +627,9 @@ int parallelProdM_DD_SIST(double **mat1, int nrL1, int nrC1, double **mat2, int 
 				MPI_Recv(&((*result)[i * dimBlockL1][j * dimBlockC2]), 1, blocK2DR, procMatrix[i][j], 1000, MPI_COMM_WORLD, &status);
 			}
 		}
-
+		free2ddouble(&aBlock);
+		free2ddouble(&bBlock);
+		free2ddouble(&resBlock);
 		MPI_Type_free(&blocK2DR);
 		MPI_Type_free(&blocK2DM1);
 		MPI_Type_free(&blocK2DM2);
@@ -839,7 +825,6 @@ int prodMV_DD(double** mat, int nrL, int nrC, double *v, int dim, double **resul
 	MPI_Comm_rank(MPI_COMM_WORLD, &rankL);
 	if(nrC != dim)
 	{
-		printErrorMessage(-10, rankL, "parallelProdM_DD\0");
 		return -10;
 	}
 	if(nProcs == 1 || nProcs == 2)
