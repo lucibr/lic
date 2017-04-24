@@ -21,3 +21,9 @@ mpirun -np 25 ./a.out 150 150 5 5 30 (pivot prea mic)
 
 inmultire
 mpirun -np 5 ./a.out 400 600 600 400 200 300 300 200 (sist)
+
+
+forward substitution (gauss elim)
+mpirun -np 4 ./a.out 4 4 2
+mpirun -np 4 ./a.out 6 6 3
+
