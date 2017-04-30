@@ -1,6 +1,8 @@
 #include <stdio.h>
+#include <time.h>
+#include <math.h>
 
-#define EPS 0.01  
+#define EPS 0.001  
 
 void printErrorMessage(int errorCode, int MPI_Process_Rank, char* functionName)
 {
@@ -45,6 +47,8 @@ void printErrorMessage(int errorCode, int MPI_Process_Rank, char* functionName)
 		case -13:
 			printf("\nProcess %d (function %s): Incorrectly defined system...\n", MPI_Process_Rank, functionName);
 			break;
+		case -14:
+			printf("\nProcess %d (function %s): Matrix cannot be Cholesky factorized - not symmetric positive definite...\n", MPI_Process_Rank, functionName);
 		default:
 			printf("\nProcess %d (function %s): Unknown error...\n", MPI_Process_Rank, functionName);
 			break;

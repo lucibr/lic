@@ -1,5 +1,3 @@
-#include <time.h>
-
 #include "memAlloc.h"
 #include "constants.h"
 #include "MPIWrapper.h"
@@ -551,7 +549,7 @@ int parallelBackSubst(double **mat, int matDim, double *b, int dim, double **res
 	bValues = (double *)calloc(blockDim, sizeof(double));
 	xValues = (double *)calloc(blockDim, sizeof(double));
 	*result = (double *)calloc(matDim, sizeof(double));
-	if(!localLine || !localColumn || !bValues || !xValues || !result)
+	if(!localLine || !localColumn || !bValues || !xValues || !result || !computedX)
 	{
 		if(rankL == 0)
 		{
@@ -962,7 +960,7 @@ int forwardSubst(double **mat, int matDim, double *b, int dim, double **result, 
 	{
 		return -13;
 	}
-	if(nProcs == 1)
+	if(nProcs == 1  || matDim/blockDim == 1)
 	{
 		if(rankL == 0)
 		{

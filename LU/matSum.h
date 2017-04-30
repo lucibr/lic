@@ -1,6 +1,6 @@
 #include "memAlloc.h"
 #include "MPIWrapper.h"
-
+#include "constants.h"
 
 int sumM_DD(double **mat1, double **mat2, double f1, double f2, int nrL, int nrC, double *runtime, double ***result)
 {
@@ -25,6 +25,16 @@ int sumM_DD_P(double **mat1, double **mat2, double f1, double f2, int nrL, int n
 	double start_time, stop_time, *receivedElems1, *receivedElems2, factor1 = f1, factor2 = f2;
 	//Total number of matrix elements
 	unsigned long n;
+
+	if(malloc2ddouble(result, nrL, nrC) != 0)
+	{
+		if(rankL == 0)
+		{
+			printErrorMessage(-5, rankL, "sumM_DD_P\0");
+		}
+		MPI_Abort(MPI_COMM_WORLD, -5);
+		return -5;
+	}
 
 	if(nProcs == 1)
 	{
@@ -81,8 +91,9 @@ int sumM_DD_P(double **mat1, double **mat2, double f1, double f2, int nrL, int n
 	}
 	MPI_Bcast(&factor1, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	MPI_Bcast(&factor2, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-	MPI_Scatterv(&(mat1[0][0]), toSend, offsets, MPI_DOUBLE, receivedElems1, nrElem + 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-	MPI_Scatterv(&(mat2[0][0]), toSend, offsets, MPI_DOUBLE, receivedElems2, nrElem + 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	MPI_Scatterv(&(mat1[0][0]), toSend, offsets, MPI_DOUBLE, receivedElems1, toSend[rankL], MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	MPI_Scatterv(&(mat2[0][0]), toSend, offsets, MPI_DOUBLE, receivedElems2, toSend[rankL], MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
 	for(i = 0; i < toSend[rankL]; i++)
 	{
 		receivedElems1[i] = receivedElems1[i] * factor1 + receivedElems2[i] * factor2;
@@ -94,7 +105,8 @@ int sumM_DD_P(double **mat1, double **mat2, double f1, double f2, int nrL, int n
 			return -5;
 		}
 	}
-	MPI_Gatherv(receivedElems1, toSend[rankL], MPI_INT, &((*result)[0][0]), toSend, offsets, MPI_INT, 0, MPI_COMM_WORLD);
+
+	MPI_Gatherv(receivedElems1, toSend[rankL], MPI_DOUBLE, &((*result)[0][0]), toSend, offsets, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	
 	if(rankL == 0)
 	{

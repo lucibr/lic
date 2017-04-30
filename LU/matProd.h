@@ -605,7 +605,9 @@ int parallelProdM_DD_SIST(double **mat1, int nrL1, int nrC1, double **mat2, int 
 				}
 			}
 		}
-
+		free2ddouble(&aBlock);
+		free2ddouble(&bBlock);
+		free2ddouble(&resBlock);
 	}
 	
 	//Receive the processed info into result matrix
@@ -627,9 +629,6 @@ int parallelProdM_DD_SIST(double **mat1, int nrL1, int nrC1, double **mat2, int 
 				MPI_Recv(&((*result)[i * dimBlockL1][j * dimBlockC2]), 1, blocK2DR, procMatrix[i][j], 1000, MPI_COMM_WORLD, &status);
 			}
 		}
-		free2ddouble(&aBlock);
-		free2ddouble(&bBlock);
-		free2ddouble(&resBlock);
 		MPI_Type_free(&blocK2DR);
 		MPI_Type_free(&blocK2DM1);
 		MPI_Type_free(&blocK2DM2);

@@ -20,10 +20,23 @@ mpirun -np 25 ./a.out 150 150 5 5 30 (pivot prea mic)
 
 
 inmultire
-mpirun -np 5 ./a.out 400 600 600 400 200 300 300 200 (sist)
+mpirun -np 3 ./a.out 4 4 4 4 3 3 3 3
+mpirun -np 5 ./a.out 4 4 4 4 2 2 2 2 (sist?)
+mpirun -np 5 ./a.out 400 600 600 400 200 300 300 200 (sist!)
 
 
 forward substitution (gauss elim)
 mpirun -np 4 ./a.out 4 4 2
 mpirun -np 4 ./a.out 6 6 3
 
+
+193.226.40.133:2222
+
+f#a22ff5b7
+scp -P 2222 testMatProd.c blir1617@193.226.40.133:
+
+mpirun -np 1 ./testMatSum 4 4 1 1
+MPI Application rank 0 killed before MPI_Finalize() with signal 11
+
+mpirun -np 2 ./testMatSum 4 4 1 1
+MPI Application rank 1 killed before MPI_Finalize() with signal 11
