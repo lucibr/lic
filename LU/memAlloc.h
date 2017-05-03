@@ -1,6 +1,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+
+typedef struct
+{
+	int absMatPos; //will store the absolute matrix position based on the (line,column) pair of the element in the original matrix
+	double value; //will store the element values
+	int computed; //1 if the element was computed/received
+} PROCESSED_ELEM;
+
+
 void printVectorInt(int *v, int dim)
 {
 	int i;
@@ -43,6 +52,38 @@ void printMatrixDouble(double **m, int nrl, int nrc)
 		printf("\n");
 	}
 	printf("\n");
+}
+
+int malloc2dPE(PROCESSED_ELEM ***array, int nrl, int nrc)
+{
+	int i;
+	/* allocate the n*m contiguous items */
+	PROCESSED_ELEM *p = (PROCESSED_ELEM *)malloc(nrl*nrc * sizeof(PROCESSED_ELEM));
+	if(!p)
+		return -1;
+
+	/* allocate the row pointers into the memory */
+	(*array) = (PROCESSED_ELEM **)malloc(nrl*sizeof(PROCESSED_ELEM*));
+	if(!array)
+	{
+		free(p);
+		return -1;
+	}
+
+	/* set up the pointers into the contiguous memory */
+	for (i=0; i<nrl; i++)
+	       	(*array)[i] = &(p[i*nrc]);
+	return 0;
+}
+
+int free2dPE(PROCESSED_ELEM ***array)
+{
+	/* free the memory - the first element of the array is at the start */
+	free(&((*array)[0][0]));
+
+	/* free the pointers into the memory */
+	free(*array);
+	return 0;
 }
 
 int malloc2dint(int ***array, int nrl, int nrc)

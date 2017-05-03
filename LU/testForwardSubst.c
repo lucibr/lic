@@ -4,9 +4,11 @@ int main(int argc, char *argv[])
 	int nrL, matDim, dim, i, j, numTasks, rank, k, status, blockDim;
 	double **mat, *v, runtime, *result;
 	FILE *in;
+	char *filename;
 	matDim = atoi(argv[1]);
 	dim = atoi(argv[2]);
 	blockDim = atoi(argv[3]);
+	filename = argv[4];
 
 	
 	MPI_Framework_Init(argc, argv, &numTasks);
@@ -28,11 +30,11 @@ int main(int argc, char *argv[])
 			return -5;
 		}
 	
-		in = fopen("81.txt", "r");
+		in = fopen(filename, "r");
 
 		for(i = 0; i < matDim; i++)
 		{
-			for(j = i; j < matDim; j++)
+			for(j = 0; j <= i; j++)
 			{	
 				k = fscanf(in, "%lf",&mat[i][j]);
 			}
@@ -49,7 +51,7 @@ int main(int argc, char *argv[])
 		printf("\nProcess %d: Reading done...Closing file...\n", rank);
 		fclose(in);
 	}
-	status = backSubst(mat, matDim, v, dim, &result, blockDim, &runtime, numTasks);
+	status = forwardSubst(mat, matDim, v, dim, &result, blockDim, &runtime, numTasks);
 	if(rank == 0)
 	{
 		if(status == 0)
