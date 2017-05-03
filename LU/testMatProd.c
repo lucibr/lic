@@ -1,4 +1,4 @@
-#include "constants.h"
+
 #include "matProd.h"
 
 int main(int argc, char *argv[])
@@ -6,7 +6,8 @@ int main(int argc, char *argv[])
 	int i, j, k, nrL1, nrC1, nrL2, nrC2;
 	int numTasks, rank, status, dimBlockL1, dimBlockC1, dimBlockL2, dimBlockC2;
 	FILE *in;
-	double **mat1, **mat2, runtime, ***res;
+	double **mat1, **mat2, runtime, **res;
+	char *filename;
 	//Number of matrix 1 lines
 	nrL1 = atoi(argv[1]);
 	//Number of matrix 1 columns
@@ -24,6 +25,8 @@ int main(int argc, char *argv[])
 	//Matrix B Sub-block: number of columns
 	dimBlockC2 = atoi(argv[8]);
 
+	filename = argv[9];
+
 	MPI_Framework_Init(argc, argv, &numTasks);
 
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -32,7 +35,7 @@ int main(int argc, char *argv[])
 	{
 		if(rank == 0)
 		{
-			in = fopen("81.txt", "r");
+			in = fopen(filename, "r");
 
 			for(i = 0; i < nrL1; i++)
 			{
@@ -57,13 +60,13 @@ int main(int argc, char *argv[])
 			printf("\nProcess %d: Reading done...Closing file...", rank);
 			fclose(in);
 		}
-		status = parallelProdM_DD(mat1, nrL1, nrC1, mat2, nrL2, nrC2, &runtime, res, numTasks, dimBlockL1, dimBlockC1, dimBlockL2, dimBlockC2);
+		status = parallelProdM_DD(mat1, nrL1, nrC1, mat2, nrL2, nrC2, &runtime, &res, numTasks, dimBlockL1, dimBlockC1, dimBlockL2, dimBlockC2);
 		if(rank == 0)
 		{
 			if(status == 0)
 			{
 					printf("\nMatricea rezultat este:\n");
-					printMatrixDouble(*res, nrL1, nrC2);
+					printMatrixDouble(res, nrL1, nrC2);
 					printf("\n\nTimpul de executie: %f (number of processes: %d)\n", runtime, numTasks);
 			}
 			else

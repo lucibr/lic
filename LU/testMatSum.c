@@ -5,7 +5,7 @@ int main(int argc, char *argv[])
 	int i, j, k, nrL, nrC;
 	int numTasks, rank, status;
 	FILE *in;
-	double **mat1, **mat2, runtime, ***res, f1, f2;
+	double **mat1, **mat2, runtime, **res, f1, f2;
 	//Number of matrix 1 lines
 	nrL = atoi(argv[1]);
 	//Number of matrix 1 columns

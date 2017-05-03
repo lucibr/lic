@@ -2,7 +2,7 @@
 #include <time.h>
 #include <math.h>
 
-#define EPS 0.001  
+#define EPS 0.0001  
 
 void printErrorMessage(int errorCode, int MPI_Process_Rank, char* functionName)
 {

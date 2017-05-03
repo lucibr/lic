@@ -1,7 +1,6 @@
 #include <string.h>
 #include <limits.h>
 
-#include "constants.h"
 #include "matProd.h"
 #include "matInv.h"
 
@@ -359,20 +358,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 					if(malloc2ddouble(&localAux, dimBlock, dimBlock) != 0 || malloc2ddouble(&multiplierR, dimBlock, dimBlock) != 0 || malloc2ddouble(&multiplierC, dimBlock, dimBlock) != 0 || malloc2ddouble(&updateLblock, dimBlock, dimBlock) != 0 || malloc2ddouble(&updateUblock, dimBlock, dimBlock) != 0 || malloc2dint(&localP, dimBlock, dimBlock) != 0)
 					{
 						//Memory allocation error
-						if(rankL != 0)
-						{
-							free(localBlockIdexes);
-							for(p = 0; p < nrBlocks; p++)
-							{
-								free2ddouble(&(localBlocks[p]));
-								free2ddouble(&(localLBlocks[p]));
-								free2dint(&(localPBlocks[p]));	
-							}
-						}
-						free(blocksPerProcess);
-						MPI_Type_free(&blockType2D);
-						free2dint(&processes);
-
 						printErrorMessage(-5, rankL, "malloc\0");
 						MPI_Abort(MPI_COMM_WORLD, -5);
 						return -5;
@@ -407,23 +392,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 
 							if(res != 0)
 							{
-								free2ddouble(&multiplierR);
-								free2ddouble(&multiplierC);
-								free2ddouble(&updateLblock);
-								free2ddouble(&updateUblock);
-								free2ddouble(&localAux);
-								free(localBlockIdexes);
-								for(p = 0; p < nrBlocks; p++)
-								{
-									free2ddouble(&(localBlocks[p]));
-									free2ddouble(&(localLBlocks[p]));
-									free2dint(&(localPBlocks[p]));	
-								}
-								free(blocksPerProcess);
-								MPI_Type_free(&blockType2D);
-								free2dint(&processes);
-								free2dint(&localP);
-
 								printErrorMessage(res, rankL, "decompLU\0");
 								MPI_Abort(MPI_COMM_WORLD, res);
 								return res;
@@ -432,24 +400,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							if(supMatInv(localAux, multiplierC, dimBlock) != 0)
 							{
 								//Cannot invert superior triangular matrix
-								free2ddouble(&multiplierR);
-								free2ddouble(&multiplierC);
-								free2ddouble(&localAux);
-								free2ddouble(&updateLblock);
-								free2ddouble(&updateUblock);
-
-								free(localBlockIdexes);
-								for(p = 0; p < nrBlocks; p++)
-								{
-									free2ddouble(&(localBlocks[p]));
-									free2ddouble(&(localLBlocks[p]));	
-									free2dint(&(localPBlocks[p]));
-								}
-
-								free(blocksPerProcess);
-								MPI_Type_free(&blockType2D);
-								free2dint(&processes);
-								free2dint(&localP);
 
 								printErrorMessage(-8, rankL, "supMatInv\0");
 								MPI_Abort(MPI_COMM_WORLD, -8);
@@ -465,24 +415,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							if(infMatInv(localLBlocks[localIndexOfBlockToProcess], localAux, dimBlock) != 0)
 							{
 								//Cannot invert inferior triangular matrix
-								free2ddouble(&multiplierR);
-								free2ddouble(&multiplierC);
-								free2ddouble(&localAux);
-								free2ddouble(&updateLblock);
-								free2ddouble(&updateUblock);
-
-								free(localBlockIdexes);
-								for(p = 0; p < nrBlocks; p++)
-								{
-									free2ddouble(&(localBlocks[p]));
-									free2ddouble(&(localLBlocks[p]));	
-									free2dint(&(localPBlocks[p]));
-								}
-
-								free(blocksPerProcess);
-								MPI_Type_free(&blockType2D);
-								free2dint(&processes);
-								free2dint(&localP);
 
 								printErrorMessage(-8, rankL, "infMatInv\0");
 								MPI_Abort(MPI_COMM_WORLD, -8);
@@ -494,24 +426,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							if(multiplierR == NULL)
 							{
 								//Error in matrix product	
-								free2ddouble(&multiplierR);
-								free2ddouble(&multiplierC);
-								free2ddouble(&localAux);
-								free2ddouble(&updateLblock);
-								free2ddouble(&updateUblock);
-
-								free(localBlockIdexes);
-								for(p = 0; p < nrBlocks; p++)
-								{
-									free2ddouble(&(localBlocks[p]));
-									free2ddouble(&(localLBlocks[p]));	
-									free2dint(&(localPBlocks[p]));
-								}
-
-								free(blocksPerProcess);
-								MPI_Type_free(&blockType2D);
-								free2dint(&processes);
-								free2dint(&localP);
 
 								printErrorMessage(-9, rankL, "prodM_DI\0");
 								MPI_Abort(MPI_COMM_WORLD, -9);
@@ -550,15 +464,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							double	**localA, **localL;
 							if(malloc2ddouble(&localA, dimBlock, dimBlock) != 0 || malloc2ddouble(&localL, dimBlock, dimBlock) != 0)
 							{
-								free(blocksPerProcess);
-								free2ddouble(&localAux);
-								free2ddouble(&multiplierR);
-								free2ddouble(&multiplierC);
-								free2ddouble(&updateLblock);
-								free2ddouble(&updateUblock);
-								MPI_Type_free(&blockType2D);
-								free2dint(&processes);
-								free2dint(&localP);
 
 								printErrorMessage(-5, rankL, "malloc\0");
 								MPI_Abort(MPI_COMM_WORLD, -5);
@@ -586,18 +491,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 
 							if(res != 0)
 							{
-								free2ddouble(&localA);
-								free2ddouble(&multiplierR);
-								free2ddouble(&multiplierC);
-								free2dint(&localP);
-								free2ddouble(&localL);
-								free2ddouble(&localAux);
-								free2ddouble(&updateLblock);
-								free2ddouble(&updateUblock);
-								free(blocksPerProcess);
-								MPI_Type_free(&blockType2D);
-								free2dint(&processes);
-								free2dint(&localP);
 
 								printErrorMessage(res, rankL, "decompLU\0");
 								MPI_Abort(MPI_COMM_WORLD, res);
@@ -618,25 +511,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							if(supMatInv(localAux, multiplierC, dimBlock) != 0)
 							{
 								//Cannot invert superior triangular matrix
-								free2ddouble(&multiplierR);
-								free2ddouble(&multiplierC);
-								free2ddouble(&localAux);
-								free2ddouble(&updateLblock);
-								free2ddouble(&updateUblock);
-
-								free(localBlockIdexes);
-								for(p = 0; p < nrBlocks; p++)
-								{
-									free2ddouble(&(localBlocks[p]));
-									free2ddouble(&(localLBlocks[p]));	
-									free2dint(&(localPBlocks[p]));
-								}
-
-								free(blocksPerProcess);
-								MPI_Type_free(&blockType2D);
-								free2dint(&processes);
-								free2dint(&localP);
-
 								printErrorMessage(-8, rankL, "supMatInv\0");
 								MPI_Abort(MPI_COMM_WORLD, -8);
 								return -8;
@@ -652,18 +526,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							if(infMatInv(localL, localAux, dimBlock) != 0)
 							{
 								//Cannot invert inferior triangular matrix
-								free2ddouble(&localA);
-								free2ddouble(&localL);
-								free2dint(&localP);
-								free2ddouble(&multiplierR);
-								free2ddouble(&multiplierC);
-								free2ddouble(&updateLblock);
-								free2ddouble(&updateUblock);
-								free2ddouble(&localAux);
-								free(blocksPerProcess);
-								MPI_Type_free(&blockType2D);
-								free2dint(&processes);
-								free2dint(&localP);
 
 								printErrorMessage(-8, rankL, "infMatInv\0");
 								MPI_Abort(MPI_COMM_WORLD, -8);
@@ -674,17 +536,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							if(multiplierR == NULL)
 							{
 								//Error in matrix product
-								free2ddouble(&localA);
-								free2ddouble(&localL);
-								free2ddouble(&multiplierR);
-								free2ddouble(&multiplierC);
-								free2ddouble(&updateLblock);
-								free2ddouble(&updateUblock);
-								free2ddouble(&localAux);
-								free(blocksPerProcess);
-								MPI_Type_free(&blockType2D);
-								free2dint(&processes);
-								free2dint(&localP);
 
 								printErrorMessage(-9, rankL, "prodM_DI\0");
 								MPI_Abort(MPI_COMM_WORLD, -9);
@@ -717,16 +568,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							double	**localA;
 							if(malloc2ddouble(&localA, dimBlock, dimBlock) != 0)
 							{
-								free(blocksPerProcess);
-								free2ddouble(&localAux);
-								free2ddouble(&updateLblock);
-								free2ddouble(&updateUblock);
-								free2ddouble(&multiplierR);
-								free2ddouble(&multiplierC);
-								MPI_Type_free(&blockType2D);
-								free2dint(&processes);
-								free2dint(&localP);
-
 								printErrorMessage(-5, rankL, "malloc\0");
 								MPI_Abort(MPI_COMM_WORLD, -5);
 								return -5;
@@ -756,17 +597,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							if (localAux == NULL)
 							{
 								//Error in matrix product
-								free2ddouble(&localA);
-								free2ddouble(&updateLblock);
-								free2ddouble(&updateUblock);
-								free2ddouble(&multiplierR);
-								free2ddouble(&multiplierC);
-								free2ddouble(&localAux);
-								free(blocksPerProcess);
-								MPI_Type_free(&blockType2D);
-								free2dint(&processes);
-								free2dint(&localP);
-
 								printErrorMessage(-9, rankL, "prodM_DD\0");
 								MPI_Abort(MPI_COMM_WORLD, -9);
 								return -9;
@@ -784,17 +614,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							if (localA == NULL)
 							{
 								//Error in matrix product
-								free2ddouble(&localA);
-								free2ddouble(&updateLblock);
-								free2ddouble(&updateUblock);
-								free2ddouble(&multiplierR);
-								free2ddouble(&multiplierC);
-								free2ddouble(&localAux);
-								free(blocksPerProcess);
-								MPI_Type_free(&blockType2D);
-								free2dint(&processes);
-								free2dint(&localP);
-
 								printErrorMessage(-9, rankL, "prodM_ID\0");
 								MPI_Abort(MPI_COMM_WORLD, -9);
 								return -9;
@@ -835,25 +654,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							if (localAux == NULL)
 							{
 								//Error in matrix product
-								free2ddouble(&multiplierR);
-								free2ddouble(&multiplierC);
-								free2ddouble(&localAux);
-								free2ddouble(&updateLblock);
-								free2ddouble(&updateUblock);
-
-								free(localBlockIdexes);
-								for(p = 0; p < nrBlocks; p++)
-								{
-									free2ddouble(&(localBlocks[p]));
-									free2ddouble(&(localLBlocks[p]));	
-									free2dint(&(localPBlocks[p]));
-								}
-
-								free(blocksPerProcess);
-								MPI_Type_free(&blockType2D);
-								free2dint(&processes);
-								free2dint(&localP);
-
 								printErrorMessage(-9, rankL, "prodM_DD\0");
 								MPI_Abort(MPI_COMM_WORLD, -9);
 								return -9;
@@ -872,25 +672,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							if (localAux == NULL)
 							{
 								//Error in matrix product
-								free2ddouble(&multiplierR);
-								free2ddouble(&multiplierC);
-								free2ddouble(&localAux);
-								free2ddouble(&updateLblock);
-								free2ddouble(&updateUblock);
-
-								free(localBlockIdexes);
-								for(p = 0; p < nrBlocks; p++)
-								{
-									free2ddouble(&(localBlocks[p]));
-									free2ddouble(&(localLBlocks[p]));	
-									free2dint(&(localPBlocks[p]));
-								}
-
-								free(blocksPerProcess);
-								MPI_Type_free(&blockType2D);
-								free2dint(&processes);
-								free2dint(&localP);
-
 								printErrorMessage(-9, rankL, "prodM_ID\0");
 								MPI_Abort(MPI_COMM_WORLD, -9);
 								return -9;
@@ -916,16 +697,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							double	**localA;
 							if(malloc2ddouble(&localA, dimBlock, dimBlock) != 0)
 							{
-								free(blocksPerProcess);
-								free2ddouble(&localAux);
-								free2ddouble(&multiplierR);
-								free2ddouble(&multiplierC);
-								free2ddouble(&updateLblock);
-								free2ddouble(&updateUblock);
-								MPI_Type_free(&blockType2D);
-								free2dint(&processes);
-								free2dint(&localP);
-
 								printErrorMessage(-5, rankL, "malloc\0");
 								MPI_Abort(MPI_COMM_WORLD, -5);
 								return -5;
@@ -956,17 +727,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							if (localAux == NULL)
 							{
 								//Error in matrix product
-								free2ddouble(&localA);
-								free2ddouble(&multiplierR);
-								free2ddouble(&multiplierC);
-								free2ddouble(&updateLblock);
-								free2ddouble(&updateUblock);
-								free2ddouble(&localAux);
-								free(blocksPerProcess);
-								MPI_Type_free(&blockType2D);
-								free2dint(&processes);
-								free2dint(&localP);
-
 								printErrorMessage(-9, rankL, "prodM_DD\0");
 								MPI_Abort(MPI_COMM_WORLD, -9);
 								return -9;
@@ -1014,25 +774,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 							if (localAux == NULL)
 							{
 								//Error in matrix product
-								free2ddouble(&multiplierR);
-								free2ddouble(&multiplierC);
-								free2ddouble(&localAux);
-								free2ddouble(&updateLblock);
-								free2ddouble(&updateUblock);
-
-								free(localBlockIdexes);
-								for(p = 0; p < nrBlocks; p++)
-								{
-									free2ddouble(&(localBlocks[p]));
-									free2ddouble(&(localLBlocks[p]));
-									free2dint(&(localPBlocks[p]));	
-								}
-
-								free(blocksPerProcess);
-								MPI_Type_free(&blockType2D);
-								free2dint(&processes);
-								free2dint(&localP);
-
 								printErrorMessage(-9, rankL, "prodM_DD\0");
 								MPI_Abort(MPI_COMM_WORLD, -9);
 								return -9;
@@ -1163,90 +904,4 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 
 
 	//----------------------------- LU main ------------------------------------------
-/*	int nrL, nrC, i, j, k, nrLU, nrCU, nrLL, nrCL;*/
-/*	int numTasks, rank, res, dimBlock, PR, PC;*/
-/*	FILE *in;*/
-/*	double **mat, **U, **L, runtime;*/
-/*	int **P;*/
-/*	//Number of matrix lines*/
-/*	nrL = atoi(argv[1]);*/
-/*	//Number of matrix columns*/
-/*	nrC = atoi(argv[2]);*/
-/*	//Number of process grid rows*/
-/*	PR = atoi(argv[3]);*/
-/*	//Number of process grid columns*/
-/*	PC = atoi(argv[4]);*/
-/*	//Sub-block size*/
-/*	dimBlock = atoi(argv[5]);*/
 
-/*	nrLU = nrL;*/
-/*	nrLL = nrL;*/
-/*	nrCU = nrC;*/
-/*	nrCL = nrC;*/
-
-/*	if(nrL < nrC)*/
-/*	{*/
-/*		nrCL = nrL;*/
-/*	}*/
-/*	else*/
-/*	{*/
-/*		nrLU = nrC;*/
-/*	}*/
-/*	MPI_Framework_Init(argc, argv, &numTasks);*/
-
-/*	MPI_Comm_rank(MPI_COMM_WORLD, &rank);*/
-/*	if(malloc2ddouble(&mat, nrL, nrC) == 0)*/
-/*	{*/
-/*		if(rank == 0)*/
-/*		{*/
-/*			in = fopen("81.txt", "r");*/
-
-/*			for(i = 0; i < nrL; i++)*/
-/*			{*/
-/*				for(j = 0; j < nrC; j++)*/
-/*				{	*/
-/*					k = fscanf(in, "%lf",&mat[i][j]);*/
-/*				}*/
-/*			}*/
-/*			printf("\nProcess %d: Reading done...", rank);*/
-/*			fclose(in);*/
-/*			printf("\nProcess %d: File closed...\nThe matrix is:\n", rank);			*/
-/*			printMatrixDouble(mat, nrL, nrC);*/
-/*		}*/
-/*		res = parallelDecompLU(mat, &L, &U, &P, nrL, nrC, &nrLU, &nrCU, &nrLL, &nrCL, numTasks, PR, PC, dimBlock, &runtime);*/
-/*		if(res < 0)*/
-/*		{*/
-/*			printErrorMessage(res, rank, "parallelDecompLU\0");*/
-/*		}*/
-/*		if(rank == 0)*/
-/*		{*/
-/*			if (res == 0)*/
-/*			{*/
-/*				printf("\nMatricea L:\n");*/
-/*				printMatrixDouble(L, nrLL, nrCL);*/
-/*				printf("\nMatricea U:\n");*/
-/*				printMatrixDouble(U, nrLU, nrCU);*/
-/*				printf("\nMatricea P:\n");*/
-/*			    printMatrixInt(P, nrL, nrL);*/
-/*				printf("\n\nTimpul de executie: %f\n", runtime);*/
-/*			}*/
-/*		}*/
-
-/*		res = sumM_DD_P(L, U, 1, 1, nrL, nrC, 1, &runtime, &L);*/
-
-/*		if (res == 0 && rank == 0)*/
-/*			{*/
-/*				printf("\nMatricea U+L:\n");*/
-/*				printMatrixDouble(L, nrL, nrC);*/
-/*				printf("\n\nTimpul de executie: %f\n", runtime);*/
-/*			}*/
-/*		free2ddouble(&mat);	*/
-/*	}*/
-/*	else*/
-/*	{*/
-/*		printf("\nError in memory allocation...!\n");*/
-/*	}*/
-	//----------------------------- LU main ------------------------------------------
-//	MPI_Framework_Stop();
-//	return 0;	
-//}

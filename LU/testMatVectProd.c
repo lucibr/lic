@@ -1,4 +1,3 @@
-#include "constants.h"
 #include "matProd.h"
 
 int main(int argc, char *argv[])
@@ -6,13 +5,16 @@ int main(int argc, char *argv[])
 	int nrL, nrC, dim, i, j, numTasks, rank, k, status;
 	double **mat, *v, runtime, *result;
 	FILE *in;
+	char *filename;
 	//Number of matrix 1 lines
 	nrL = atoi(argv[1]);
 	//Number of matrix 1 columns
 	nrC = atoi(argv[2]);
-	//Number of matrix 2 lines
+	//Number vector columns
 	dim = atoi(argv[3]);
 	
+	filename = argv[4];
+
 	MPI_Framework_Init(argc, argv, &numTasks);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	
@@ -32,7 +34,7 @@ int main(int argc, char *argv[])
 			return -5;
 		}
 	
-		in = fopen("81.txt", "r");
+		in = fopen(filename, "r");
 
 		for(i = 0; i < nrL; i++)
 		{
