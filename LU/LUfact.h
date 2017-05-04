@@ -883,25 +883,3 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 	}
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	//----------------------------- LU main ------------------------------------------
-

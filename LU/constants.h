@@ -49,7 +49,8 @@ void printErrorMessage(int errorCode, int MPI_Process_Rank, char* functionName)
 			break;
 		case -14:
 			printf("\nProcess %d (function %s): Matrix cannot be Cholesky factorized - not symmetric positive definite...\n", MPI_Process_Rank, functionName);
-	
+		case -15:
+			printf("\nProcess %d (function %s): Serial gauss elimination in matrix sub-block...\n", MPI_Process_Rank, functionName);
 		default:
 			printf("\nProcess %d (function %s): Unknown error...\n", MPI_Process_Rank, functionName);
 			break;

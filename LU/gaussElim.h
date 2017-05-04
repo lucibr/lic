@@ -84,7 +84,254 @@ int serialBackSubst(double **mat, int matDim, double *b, int dim, double **resul
 	return 0;
 }
 
-int parallelForwardSubst(double **mat, int matDim, double *b, int dim, double **result, int blockDim, double *runtime, int nProcs)
+int parallelForwardSubst_Block(double **mat, int matDim, double *b, int dim, double **result, int blockDim, int nProcs)
+{
+	int rankL, i, j, aux, procMatDim, necProcs, isDiagonal = 0, procLine, procColumn, res,
+		**procMatrix;
+	double 	auxF,
+			*bValues, 
+			*xValues,
+			*auxContainer,
+			**localElems;
+
+	MPI_Status status;
+
+	MPI_Datatype blockType2D;
+
+	if(matDim % blockDim != 0)
+	{	
+		return -6;
+	}
+	procMatDim = matDim/blockDim;
+	necProcs = (procMatDim * procMatDim - procMatDim)/2 + procMatDim + 1;
+	if(necProcs > nProcs)
+	{
+		return -3;
+	}
+	MPI_Comm_rank(MPI_COMM_WORLD, &rankL);
+	//Create MPI custom type in order to distribute to all processes 2D blocks of size dimR x dimC 
+	//int MPI_Type_vector(int rowCount, int columnCount, int nrElemsToJump, MPI_Datatype oldtype, MPI_Datatype *newtype)
+	if(MPI_Type_vector(blockDim, blockDim, matDim, MPI_DOUBLE, &blockType2D) != 0)
+	{
+		//Cannot create custom MPI type
+		printErrorMessage(-7, rankL, "MPI_Type_vector->parallelForwardSubst_Block\0");
+		MPI_Abort(MPI_COMM_WORLD, -7);
+		return -7;
+	}
+	MPI_Type_commit(&blockType2D);
+	if(malloc2dint(&procMatrix, procMatDim, procMatDim) != 0)
+	{	
+		printErrorMessage(-5, rankL, "parallelForwardSubst_Block\0");
+		MPI_Abort(MPI_COMM_WORLD, -5);
+		return -5;
+	}
+	if(rankL != 0)
+	{
+		if(malloc2ddouble(&localElems, blockDim, blockDim) != 0)
+		{	
+			printErrorMessage(-5, rankL, "parallelForwardSubst_Block\0");
+			MPI_Abort(MPI_COMM_WORLD, -5);
+			return -5;
+		}
+	}
+	aux = 1;
+	//Creating mapping block-process matrix
+	for(i = 0; i < procMatDim; i++)
+	{
+		for(j = 0; j <= i; j++)
+		{
+			procMatrix[i][j] = aux++;
+			if(rankL == procMatrix[i][j])
+			{
+				procLine = i;
+				procColumn = j;
+				if(i == j)
+				{
+					isDiagonal = 1;
+					bValues = (double *)calloc(blockDim, sizeof(double));
+					if(!bValues)
+					{
+						printErrorMessage(-5, rankL, "parallelForwardSubst_Block\0");
+						MPI_Abort(MPI_COMM_WORLD, -5);
+						return -5;
+					}
+				}
+			}
+		}
+	}
+	if(rankL == 0)
+	{
+		printMatrixInt(procMatrix, procMatDim, procMatDim);
+		printf("\nProcese necesare: %d", necProcs);
+		//Main process - distributing data to workers 1...necProcs-1
+		for(i = 0; i < procMatDim; i++)
+		{
+			for(j = 0; j <= i; j++)
+			{
+				//Sending block to be processed to process procMatrix[i][j]
+				MPI_Send(&(mat[i * blockDim][j * blockDim]), 1, blockType2D, procMatrix[i][j], 0, MPI_COMM_WORLD);
+				//If for the current worker process has a diagonal local block, send corresponding free terms
+				if(i == j)
+				{
+					MPI_Send(&(b[i]), blockDim, MPI_DOUBLE, procMatrix[i][j], 1, MPI_COMM_WORLD);
+				}
+			}
+		}
+		//Collecting results from diagonal processes
+		for(i = 0; i < procMatDim; i++)
+		{
+			MPI_Recv(&(result[i*blockDim]), blockDim, MPI_DOUBLE, procMatrix[i][i], 3, MPI_COMM_WORLD, &status);
+		}
+	}
+	else
+	{
+		//Worker process
+		//Receive data to be processed
+		//Receive local block
+		MPI_Recv(&(localElems[0][0]), blockDim * blockDim, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
+		if(isDiagonal)
+		{
+			MPI_Recv(&(bValues[0]), blockDim, MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, &status);
+		}
+		if(rankL == procMatrix[0][0])
+		{
+			//First worker does not need information from other workers
+			res = serialForwadSubst(localElems, blockDim, bValues, blockDim, &xValues);
+			if(res)
+			{
+				printErrorMessage(-15, rankL, "parallelForwardSubst_Block\0");
+				MPI_Abort(MPI_COMM_WORLD, -15);
+				return -15;
+			}
+			//Send computed solution elements to all column processes
+			for(i = 0; i < procMatDim; i++)
+			{
+				if(i > procLine)
+				{
+					MPI_Send(&(xValues[0]), blockDim, MPI_DOUBLE, procMatrix[i][procColumn], 4, MPI_COMM_WORLD);
+				}
+			}
+			//Send computed solution to main processed
+			MPI_Send(&(xValues[0]), blockDim, MPI_DOUBLE, 0, 3, MPI_COMM_WORLD);
+			free(xValues);
+			free(bValues);
+		}
+		else if(rankL == procMatrix[blockDim-1][blockDim-1])
+		{
+			//Last worker (diagonal) does not have to send information to other workers
+			auxContainer = (double *)calloc(blockDim, sizeof(double));
+			if(!auxContainer)
+			{
+				printErrorMessage(-5, rankL, "parallelForwardSubst_Block\0");
+				MPI_Abort(MPI_COMM_WORLD, -5);
+				return -5;
+			}
+			for(i = 0; i < procColumn; i++)
+			{
+				//Requesting partial sums from line workers
+				MPI_Recv(&(auxContainer[0]), blockDim, MPI_DOUBLE, procMatrix[procLine][i], 5, MPI_COMM_WORLD, &status);
+				//Updating free local free terms values
+				for(j = 0; j < blockDim; j++)
+				{
+					bValues[j] -= auxContainer[j];
+				}
+			}
+			free(auxContainer);
+			//Computing local solutions
+			res = serialForwadSubst(localElems, blockDim, bValues, blockDim, &xValues);
+			if(res)
+			{
+				printErrorMessage(-15, rankL, "parallelForwardSubst_Block\0");
+				MPI_Abort(MPI_COMM_WORLD, -15);
+				return -15;
+			}
+			//Send computed solution to main processed
+			MPI_Send(&(xValues[0]), blockDim, MPI_DOUBLE, 0, 3, MPI_COMM_WORLD);
+			free(xValues);
+			free(bValues);
+		}
+		else
+		{
+			if(procColumn != procLine)
+			{
+				//Not a diagonal process
+				//Receive computed solutions from diagonal process above (xValues will be used as container)
+				xValues = (double *)calloc(blockDim, sizeof(double));
+				bValues = (double *)calloc(blockDim, sizeof(double));
+				if(!xValues || !bValues)
+				{
+					printErrorMessage(-5, rankL, "parallelForwardSubst_Block\0");
+					MPI_Abort(MPI_COMM_WORLD, -5);
+					return -5;
+				}
+				MPI_Recv(&(xValues[0]), blockDim, MPI_DOUBLE, procMatrix[procColumn][procColumn], 4, MPI_COMM_WORLD, &status);
+				//Computing partial sums to be sent to the diagonal process from the same line
+				for(i = 0; i < blockDim; i++)
+				{
+					auxF = 0;
+					for(j = 0; j < blockDim; j++)
+					{
+						auxF += localElems[i][j] * xValues[j];
+					}
+					bValues[i] = auxF;
+				}
+				//Sending partial sums to the diagonal process from the same lines
+				MPI_Send(&(bValues[0]), blockDim, MPI_DOUBLE, procMatrix[procLine][procLine], 5, MPI_COMM_WORLD);
+				free(xValues);
+				free(bValues);
+			}
+			else
+			{
+				//Diagonal process
+				//Request partial sums from the processes from the same line and update accordingly the free terms values
+				for(i = 0; i < procColumn; i++)
+				{
+					//Last worker (diagonal) does not have to send information to other workers
+					auxContainer = (double *)calloc(blockDim, sizeof(double));
+					if(!auxContainer)
+					{
+						printErrorMessage(-5, rankL, "parallelForwardSubst_Block\0");
+						MPI_Abort(MPI_COMM_WORLD, -5);
+						return -5;
+					}
+					//Requesting partial sums from line workers
+					MPI_Recv(&(auxContainer[0]), blockDim, MPI_DOUBLE, procMatrix[procLine][i], 5, MPI_COMM_WORLD, &status);
+					//Updating free local free terms values
+					for(j = 0; j < blockDim; j++)
+					{
+						bValues[j] -= auxContainer[j];
+					}
+					free(auxContainer);
+				}
+				//Computing local solution elements
+				res = serialForwadSubst(localElems, blockDim, bValues, blockDim, &xValues);
+				if(res)
+				{
+					printErrorMessage(-15, rankL, "parallelForwardSubst_Block\0");
+					MPI_Abort(MPI_COMM_WORLD, -15);
+					return -15;
+				}
+				//Send computed solution elements to all column processes
+				for(i = 0; i < procMatDim; i++)
+				{
+					if(i > procLine)
+					{
+						MPI_Send(&(xValues[0]), blockDim, MPI_DOUBLE, procMatrix[i][procColumn], 4, MPI_COMM_WORLD);
+					}
+				}
+				//Send computed solution to main processed
+				MPI_Send(&(xValues[0]), blockDim, MPI_DOUBLE, 0, 3, MPI_COMM_WORLD);
+				free(xValues);
+				free(bValues);
+			}
+		}
+	}
+	free2dint(&procMatrix);
+	MPI_Type_free(&blockType2D);
+	return 0;
+}
+
+int parallelForwardSubst(double **mat, int matDim, double *b, int dim, double **result, int blockDim, int nProcs)
 {
 	int rankL, i, j, aux, procMatDim, startElem, currentI, currentJ, p, receive, nrDiagElem = 0, r, proc, line,
 		**procElemMatrix;
@@ -93,6 +340,7 @@ int parallelForwardSubst(double **mat, int matDim, double *b, int dim, double **
 			*xValues;//will store the free solution values processed locally
 	PROCESSED_ELEM **localElem; //Will store the matrix elements processed locally by each process
 	MATPOS currentPos, procPos;
+
 	procMatDim = matDim/blockDim;
 	
 	MPI_Status status;
@@ -186,7 +434,6 @@ int parallelForwardSubst(double **mat, int matDim, double *b, int dim, double **
 				currentJ = (startElem-1)%matDim;
 			}
 		}
-		//printMatrixInt(procElemMatrix, matDim, matDim);
 		//Sending elements to be processed to workers
 		for(i = 0; i < matDim; i++)
 		{
@@ -220,7 +467,6 @@ int parallelForwardSubst(double **mat, int matDim, double *b, int dim, double **
 	}
 	else
 	{
-		//MATPOS currentPos;
 		//Workers - receiving data to process
 		//Receive matrix data
 		aux = 0; //counts the number of received elems
@@ -335,24 +581,7 @@ int parallelForwardSubst(double **mat, int matDim, double *b, int dim, double **
 				}
 			}
 		}
-//		if(rankL == 1)
-//		{
-//			for(i = 0; i < blockDim; i++)
-//			{
-//				for(j = 0; j < blockDim; j++)
-//				{
-//					printf("%.3lf (%d,%d)", localElem[i][j].value, matAbstoRelPos(localElem[i][j].absMatPos, matDim).l, matAbstoRelPos(localElem[i][j].absMatPos, matDim).c);
-//				}
-//				printf("\n");
-//			}
-//			for(i = 0; i < blockDim; i++)
-//			{
-//				printf("@@%.3lf ", bValues[i]);
-//			}
-//		}
 	}
-
-	//MPI_Barrier(MPI_COMM_WORLD);	
 	//Data processing					
 	if(rankL != 0)
 	{
@@ -377,12 +606,9 @@ int parallelForwardSubst(double **mat, int matDim, double *b, int dim, double **
 								proc = rankL;
 								for(r = 0; r < procMatDim; r++)
 								{
-									//printf("\n!?!??!?!?!!?Process %d: to process %d (r, blockdim) = (%d %d)...\n", rankL, xValues[i], proc, r, blockDim);
-									//proc = mapElemProcess_FS(matDim, blockDim, currentPos.l+r, currentPos.c, nProcs-1);
 									if(proc != rankL)
 									{
 										//Send solution component		
-										//printf("\n!?!??!?!?!!?Process %d: Sendind solution component 0 (value %.3lf) to process %d...\n", rankL, xValues[i], proc);
 										MPI_Send(&(xValues[i]), 1, MPI_DOUBLE, proc, currentPos.l, MPI_COMM_WORLD);
 									}
 									proc += procMatDim;
@@ -398,23 +624,16 @@ int parallelForwardSubst(double **mat, int matDim, double *b, int dim, double **
 								for(r = 0; r < procMatDim; r++)
 								{
 									proc = rankL - procPos.c + r;
-									//if(rankL == 1)
-									//printf("\nProcess %d: request to %d...\n\n", rankL,proc);
 									if(proc != rankL)
 									{
 										//Signal process proc to continue to process data from the current process
 										MPI_Send(&receive, 1, MPI_INT, proc, 1111, MPI_COMM_WORLD);
 										//Send to each row process the tag (line number) of the desired partial sum
 										MPI_Send(&(line), 1, MPI_INT, proc, 111, MPI_COMM_WORLD);
-										//if(rankL==1)
-										//printf("\n>>Process %d: Requesting line %d partial sum from process %d...", rankL, line, proc);
 										MPI_Recv(&toSend, 1, MPI_DOUBLE, proc, line, MPI_COMM_WORLD, &status);
-										//if(rankL==1)
-										//printf("\n<<Process %d: Partial sum (value %.3lf) for line %d received from process %d.", rankL, toSend, line, proc);
 										auxF += toSend;
 									}
 								}
-								//printf("\nProcess %d: toSend (before) = %.3lf.\n", rankL, toSend);
 								xValues[i] = auxF;
 								//Computing local partial sum corresponding to the line of the analized local element
 								for(r = 0; r < j; r++)
@@ -425,7 +644,6 @@ int parallelForwardSubst(double **mat, int matDim, double *b, int dim, double **
 									}
 								}
 								xValues[i] = (bValues[i] - xValues[i])/localElem[i][j].value;
-								//if(rankL==1)printf("\nProcess %d (): sending solution for line %d...\n",rankL, line);
 								if(line < matDim - 1)
 								{
 									//Send solution to all column processes in ascending order of columns
@@ -438,7 +656,6 @@ int parallelForwardSubst(double **mat, int matDim, double *b, int dim, double **
 										{
 											proc -= procMatDim;
 											//Send solution component
-											//printf("\n@@@Process %d: Sending solution component %d (value %.3lf) to process %d...", rankL, line, xValues[i], proc);
 											MPI_Send(&(xValues[i]), 1, MPI_DOUBLE, proc, line, MPI_COMM_WORLD);
 											r--;
 										}
@@ -450,27 +667,8 @@ int parallelForwardSubst(double **mat, int matDim, double *b, int dim, double **
 									{								
 										proc += procMatDim;		
 										//Send solution component
-										//printf("\n###Process %d: Sending solution component %d (value %.3lf) to process %d...", rankL, line, xValues[i], proc);
 										MPI_Send(&(xValues[i]), 1, MPI_DOUBLE, proc, line, MPI_COMM_WORLD);										
 									}
-//									r = procPos.l;
-//									proc = rankL;
-//									while(r > 0)
-//									{
-//										proc -= procMatDim;
-//										r--; 
-//									}
-//									printf("\nProcess %d: Starting r (%d) and proc %d...\n", rankL,r, proc);
-//									for(p = r; p < procMatDim; p++)
-//									{
-//										if(proc!=rankL)
-//										{
-//										//Send solution component
-//										printf("\n###Process %d: Sending solution component %d (value %.3lf) to process %d...", rankL, line, xValues[i], proc);
-//										MPI_Send(&(xValues[i]), 1, MPI_DOUBLE, proc, line, MPI_COMM_WORLD);
-//										}
-//										proc+=procMatDim;
-//									}
 								}
 							}
 						}
@@ -488,7 +686,6 @@ int parallelForwardSubst(double **mat, int matDim, double *b, int dim, double **
 					proc = rankL - procPos.c + r;
 					if(proc != rankL)
 					{
-						//printf("\nProcess %d: sending signlae stop to process %d...\n", rankL, proc);
 						//Signal process procMatrix[i][r] to continue to process data from the current process
 						MPI_Send(&receive, 1, MPI_INT, proc, 1111, MPI_COMM_WORLD);
 					}
@@ -512,7 +709,6 @@ int parallelForwardSubst(double **mat, int matDim, double *b, int dim, double **
 				if(localElem[r][0].computed == 1 && matAbstoRelPos(localElem[r][0].absMatPos, matDim).c == 0)
 				{
 					MPI_Recv(&(xValues[0]), 1, MPI_DOUBLE, 1, 0, MPI_COMM_WORLD, &status);
-					//printf("\n???Process %d: Received solution 0 (value %.3lf) -> %d from process 1.", rankL, xValues[0], 0);
 					break;
 				}
 			}
@@ -521,14 +717,11 @@ int parallelForwardSubst(double **mat, int matDim, double *b, int dim, double **
 			do
 			{
 				//Continue to process requests from the row process which storres diagonal elements? 
-				//printf("\nProcess %d: Receveing signal from process %d...", rankL, proc);
 				MPI_Recv(&receive, 1, MPI_INT, proc, 1111, MPI_COMM_WORLD, &status);
-				//printf("\nProcess %d: receiived %d\n\n", rankL, receive);
 				if(receive)
 				{
 					//Receive line for which partial sum will be returned
 					MPI_Recv(&line, 1, MPI_INT, proc, 111, MPI_COMM_WORLD, &status);
-					//printf("\nProcess %d: IdProc(%d) requested line %d partial sum...\n", rankL, proc, line);
 					for(r = 0; r < blockDim; r++)
 					{
 						if(matAbstoRelPos(localElem[r][0].absMatPos, matDim).l == line)
@@ -553,9 +746,7 @@ int parallelForwardSubst(double **mat, int matDim, double *b, int dim, double **
 								if(fabs(xValues[p] - DBL_MAX) < EPS)
 								{
 									sourceProc = mapElemProcess_FS(matDim, blockDim, column, column, nProcs-1);
-									//printf("\n#+#+#+Process %d: Requesting solution %d from process %d (tag %d)...", rankL, column, sourceProc, column);
 									MPI_Recv(&(xValues[p]), 1, MPI_DOUBLE, sourceProc, column, MPI_COMM_WORLD, &status);	
-									//printf("\n#-#-#-Process %d: Received solution %d (value = %.3lf) from process %d (tag %d)...", rankL, column, xValues[p], sourceProc, column);	
 								}	
 							}	
 						}
@@ -564,15 +755,12 @@ int parallelForwardSubst(double **mat, int matDim, double *b, int dim, double **
 						{	
 							toSend += (xValues[p]*localElem[r][p].value);
 						}
-						//if(rankL==2)
-						//printf("\n<<Process %d: Sending partial sum (value = %.3lf, tag = %d) to porcess %d...\n", rankL, toSend, line, proc);
 						MPI_Send(&toSend, 1, MPI_DOUBLE, proc, line, MPI_COMM_WORLD);
 					}
 				}
 			}
 			while(receive);
 		}
-		//printf("\nProcess %d ending...\n",rankL);
 	}
 	else
 	{
@@ -604,7 +792,7 @@ int parallelForwardSubst(double **mat, int matDim, double *b, int dim, double **
 	return 0;
 }
 
-int parallelBackSubst(double **mat, int matDim, double *b, int dim, double **result, int blockDim, double *runtime, int nProcs)
+int parallelBackSubst(double **mat, int matDim, double *b, int dim, double **result, int blockDim, int nProcs)
 {
 	int rankL, i, j, aux, procMatDim, startElem, currentI, currentJ, continueAssignement, currentNrL, currentNrC, k, p, ok, receive, nrDiagElem = 0, r,
 		localLineValue,
@@ -1015,7 +1203,7 @@ int parallelBackSubst(double **mat, int matDim, double *b, int dim, double **res
 			}
 		}
 	}
-
+	
 	//Collecting results
 	if(rankL == 0)
 	{
@@ -1077,7 +1265,8 @@ int forwardSubst(double **mat, int matDim, double *b, int dim, double **result, 
 	else
 	{
 		start_time = MPI_Wtime();
-		res = parallelForwardSubst(mat, matDim, b, dim, result, blockDim, runtime, nProcs);
+		//res = parallelForwardSubst(mat, matDim, b, dim, result, blockDim, nProcs);
+		res = parallelForwardSubst_Block(mat, matDim, b, dim, result, blockDim, nProcs);
 		stop_time = MPI_Wtime();
 		*runtime = stop_time - start_time;
 		return res;
@@ -1109,7 +1298,7 @@ int backSubst(double **mat, int matDim, double *b, int dim, double **result, int
 	else
 	{
 		start_time = MPI_Wtime();
-		res = parallelBackSubst(mat, matDim, b, dim, result, blockDim, runtime, nProcs);
+		res = parallelBackSubst(mat, matDim, b, dim, result, blockDim, nProcs);
 		stop_time = MPI_Wtime();
 		*runtime = stop_time - start_time;
 		return res;
