@@ -53,7 +53,7 @@ int main(int argc, char *argv[])
 			printf("\nProcess %d: Reading done...", rank);
 			fclose(in);
 			printf("\nProcess %d: File closed...\nThe matrix is:\n", rank);			
-			//printMatrixDouble(mat, nrL, nrC);
+			printMatrixDouble(mat, nrL, nrC);
 		}
 		res = parallelDecompLU(mat, &L, &U, &P, nrL, nrC, &nrLU, &nrCU, &nrLL, &nrCL, numTasks, PR, PC, dimBlock, &runtime);
 		if(res < 0)
@@ -64,12 +64,12 @@ int main(int argc, char *argv[])
 		{
 			if (res == 0)
 			{
-				//printf("\nMatricea L:\n");
-				//printMatrixDouble(L, nrLL, nrCL);
-				//printf("\nMatricea U:\n");
-				//printMatrixDouble(U, nrLU, nrCU);
-				//printf("\nMatricea P:\n");
-			    //printMatrixInt(P, nrL, nrL);
+				printf("\nMatricea L:\n");
+				printMatrixDouble(L, nrLL, nrCL);
+				printf("\nMatricea U:\n");
+				printMatrixDouble(U, nrLU, nrCU);
+				printf("\nMatricea P:\n");
+			    printMatrixInt(P, nrL, nrL);
 				printf("\n\nTimpul de executie: %f\n", runtime);
 			}
 		}
