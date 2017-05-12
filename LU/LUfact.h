@@ -198,11 +198,6 @@ int parallelDecompLU(double **mat, double ***L, double ***U, int ***P, int nrR, 
 		res = decompLU(mat, L, U, P, nrR, nrC, nrRU, nrCU, nrRL, nrCL, 1, runtime);
 		return res;
 	}
-//	else if(dimBlock < 3)
-//	{
-//		//Subblock dimension should be at least 3;
-//		return -2;
-//	}
 	else if(PC * PR > nProcs)
 	{
 		//Not sufficient resources for the specified processor grid

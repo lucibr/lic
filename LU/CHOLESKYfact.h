@@ -18,7 +18,7 @@ int serialCholeskyFact(double **mat, int matDim, double ***L)
 	{
 		for(j = 0; j <= i; j++)
 		{
-			if(i == j)
+			 if(i == j)
 			{
 				//Main diagonal elements
 				if(mat[i][j] < 0)
@@ -30,6 +30,11 @@ int serialCholeskyFact(double **mat, int matDim, double ***L)
 				for(k = 0; k < i; k++)
 				{
 					aux -= ((*L)[i][k] * (*L)[i][k]);
+				}
+				if(aux < 0)
+				{
+					//Matrix is not positive symmetric definite - Cholesky decomposition cannot be applied
+					return -14;
 				}
 				(*L)[i][j] = sqrt(aux);
 			}
@@ -53,252 +58,216 @@ int serialCholeskyFact(double **mat, int matDim, double ***L)
 	return 0;
 }
 
-int parallelCholeskyFact(double **mat, int matDim, double ***L, int blockDim, double *runtime, int nProcs)
+//mat - matrix to be factorized
+//matDim - matrix dimension (nrRows = nrColumns)
+//blockDim - dimension of sub-matrix processed by each process
+//runtime - execution duration
+//nProcs - number of available processes
+int parallelCholeskyFact_Block(double **mat, int matDim, double ***L, int blockDim, double *runtime, int nProcs)
 {
-	int rankL, i, j, aux, procMatDim, startElem, currentI, currentJ, continueAssignement, currentNrL, currentNrC, k, p, ok, receive, r,
-		**procMatrix, //Will store the processes indexes
-		**procElemMatrix, //will store the process assignement for each elem (index of process + 1 -> process 1 is rank 0 process)
-		*localLine, //will store, locally for each process, the absolute line indexes of received elements
-		*localColumn, //will store, locally for each process, the absolute column indexes of received elements
-		*computedX, //will store 1 in the corresponding position if the solution component was received/computed
-		**receivedElem; //will store 1 in the corresponding position if the element was received
-	double  toSend,
-			**localLvalues, //will store de solution components computed locally
-			**localElem; //Will store the matrix elements processed locally by each process
+	int rankL, i, j, aux, procMatDim, necProcs, isDiagonal = 0, procLine, procColumn, res, p, q,
+		**procMatrix;
+	double 	auxF,
+			*dValues,
+			**localElems,
+			**localL,
+			**auxContainer;
 
-	procMatDim = matDim/blockDim;
-	
 	MPI_Status status;
 
-	MPI_Comm_rank(MPI_COMM_WORLD, &rankL);
+	MPI_Datatype blockType2D;
 
 	if(matDim % blockDim != 0)
 	{	
 		return -6;
 	}
-
-	if((matDim/blockDim) * (matDim/blockDim) > nProcs)
+	procMatDim = matDim/blockDim;
+	necProcs = (procMatDim * procMatDim - procMatDim)/2 + procMatDim + 1;
+	if(necProcs > nProcs)
 	{
 		return -3;
 	}
-
-	if(malloc2ddouble(&localElem, blockDim, blockDim) != 0 || malloc2dint(&procMatrix, procMatDim, procMatDim) != 0 || malloc2dint(&procElemMatrix, matDim, matDim) != 0
-		|| malloc2dint(&receivedElem, blockDim, blockDim) != 0 || malloc2ddouble(&localLvalues, blockDim, blockDim) != 0)
+	MPI_Comm_rank(MPI_COMM_WORLD, &rankL);
+	//Create MPI custom type in order to distribute to all processes 2D blocks of size dimR x dimC 
+	//int MPI_Type_vector(int rowCount, int columnCount, int nrElemsToJump, MPI_Datatype oldtype, MPI_Datatype *newtype)
+	if(MPI_Type_vector(blockDim, blockDim, matDim, MPI_DOUBLE, &blockType2D) != 0)
 	{
-		if(rankL == 0)
-		{
-			printErrorMessage(-5, rankL, "parallelCholeskyFact\0");
-		}
-		MPI_Abort(MPI_COMM_WORLD, -5);
-		return -5;
+		//Cannot create custom MPI type
+		printErrorMessage(-7, rankL, "MPI_Type_vector->parallelCholeskyFact_Block\0");
+		MPI_Abort(MPI_COMM_WORLD, -7);
 	}
-
-	localLine = (int *)calloc(blockDim, sizeof(int));
-	computedX = (int *)calloc(blockDim, sizeof(int));
-	localColumn = (int *)calloc(blockDim, sizeof(int));
-	if(!localLine || !localColumn)
+	MPI_Type_commit(&blockType2D);
+	if(malloc2dint(&procMatrix, procMatDim, procMatDim) != 0)
+	{	
+		printErrorMessage(-5, rankL, "parallelCholeskyFact_Block\0");
+		MPI_Abort(MPI_COMM_WORLD, -5);
+	}
+	if(rankL != 0)
 	{
-		if(rankL == 0)
-		{
-			printErrorMessage(-5, rankL, "parallelCholeskyFact\0");
+		if(malloc2ddouble(&localElems, blockDim, blockDim) != 0)
+		{	
+			printErrorMessage(-5, rankL, "parallelCholeskyFact_Block\0");
+			MPI_Abort(MPI_COMM_WORLD, -5);
 		}
-		MPI_Abort(MPI_COMM_WORLD, -5);
-		return -5;
 	}
-
-	//Cyclick block distribution mapping
-	aux = startElem = currentNrL = currentNrC = 0;
+	aux = 1;
+	//Creating mapping block-process matrix
 	for(i = 0; i < procMatDim; i++)
 	{
-		for(j = 0; j < procMatDim; j++)
+		for(j = 0; j <= i; j++)
 		{
 			procMatrix[i][j] = aux++;
-			continueAssignement = 1;
-			while(continueAssignement && startElem < matDim*matDim)
+			if(rankL == procMatrix[i][j])
 			{
-				currentI = startElem/matDim;
-				currentJ = startElem%matDim;
-				startElem++;
-				while(currentI < matDim)
+				procLine = i;
+				procColumn = j;
+				if(i == j)
 				{
-					while(currentJ < matDim)
-					{
-						if(procElemMatrix[currentI][currentJ] == 0 && currentJ <= currentI)
-						{
-
-							if(rankL == 0) 
-							{
-								if((currentI == currentJ && mat[currentI][currentJ] < 0) || (currentI != currentJ && fabs(mat[currentI][currentJ] - mat[currentJ][currentI]) > EPS_CH_EQ))
-								{
-									printErrorMessage(-14, rankL, "parallelCholeskyFact\0");
-									MPI_Abort(MPI_COMM_WORLD, -14);
-								return -14;
-								}
-							}
-								
-
-							continueAssignement = 0;
-							procElemMatrix[currentI][currentJ] = procMatrix[i][j] + 1;
-							//Store the number of line/column where the current process has elements to process
-							if(rankL == procMatrix[i][j])
-							{
-								ok = 1;
-								for(k = 0; k < currentNrL; k++)
-								{
-									if(localLine[k] == currentI+1)
-									{
-										ok = 0;
-										break;
-									}
-									if(!ok)
-									{
-										break;
-									}
-								}
-								if(ok)
-								{
-									localLine[currentNrL++] = currentI+1;
-								}
-								ok = 1;
-								for(k = 0; k < currentNrC; k++)
-								{
-									if(localColumn[k] == currentJ+1)
-									{
-										ok = 0;
-										break;
-									}
-									if(!ok)
-									{
-										break;
-									}
-								}
-								if(ok)
-								{
-									localColumn[currentNrC++] = currentJ+1;
-								}
-							}
-						}
-						currentJ += (matDim/blockDim);
-					}
-					currentI += (matDim/blockDim);
-					currentJ = (startElem-1)%matDim;
-				}	
+					isDiagonal = 1;
+				}
 			}
 		}
 	}
-	
 	if(rankL == 0)
 	{
-		printf("\nMatrix processes:\n");
+		//Main process
+		if(malloc2ddouble(L, matDim, matDim) != 0)
+		{	
+			printErrorMessage(-5, rankL, "parallelCholeskyFact_Block\0");
+			MPI_Abort(MPI_COMM_WORLD, -5);
+		}
+		
 		printMatrixInt(procMatrix, procMatDim, procMatDim);
-		printf("\nProcess-element mapping matrix:\n");
-		printMatrixInt(procElemMatrix, matDim, matDim);
-	}
-
-	//Data distribution to processes
-	if(rankL == 0)
-	{
-		for(i = 0; i < matDim; i++)
+		printf("\nProcese necesare: %d", necProcs);
+		//Main process - distributing data to workers 1...necProcs-1
+		for(i = 0; i < procMatDim; i++)
 		{
-			for(j = 0; j < matDim; j++)
+			for(j = 0; j <= i; j++)
 			{
-				if(procElemMatrix[i][j]-1 == 0)
+				if(i != j)
 				{
-					//Main process will not use MPI_Send/MPI_Receive but will directly store elements
-					for(k = 0; k < blockDim; k++)
+					//Before sending info, check if original matrix is symmetric
+					for(p = 0; p < blockDim; p++)
 					{
-						if(localLine[k]-1 == i)
+						for(q = 0; q <= p; q++)
 						{
-							for(p = 0; p < blockDim; p++)
+							//TO CHECK IF!!!
+							if(fabs(mat[i*blockDim + p][j*blockDim + q] - mat[j*blockDim + q][i*blockDim + p]) > EPS_CH_EQ)
 							{
-								if(localColumn[p]-1 == j)
-								{
-									localElem[k][p] = mat[i][j];
-									receivedElem[k][p] = 1;
-								}
+								printErrorMessage(-14, rankL, "parallelCholeskyFact_Block\0");
+								MPI_Abort(MPI_COMM_WORLD, -14);
 							}
 						}
 					}
 				}
-				else if(procElemMatrix[i][j] != 0)
+				else
 				{
-					receive = 1;
-					//Sending continue receive process signal to process procElemMatrix[i][j]-1
-					MPI_Send(&receive, 1, MPI_INT, procElemMatrix[i][j]-1, 100, MPI_COMM_WORLD);
-					//Sending line index of the element to send
-					aux = i + 1;
-					MPI_Send(&aux, 1, MPI_INT, procElemMatrix[i][j]-1, 1, MPI_COMM_WORLD);
-					//Sending line index of the element to send
-					aux = j + 1;
-					MPI_Send(&aux, 1, MPI_INT, procElemMatrix[i][j]-1, 2, MPI_COMM_WORLD);
-					//Sending the element to process procElemMatrix[i][j]-1
-					MPI_Send(&(mat[i][j]), 1, MPI_DOUBLE, procElemMatrix[i][j]-1, 3, MPI_COMM_WORLD);
+					//Before sending info, check if diagonal block is symmetric and positive definite
+					for(p = 0; p < blockDim; p++)
+					{
+						for(q = 0; q <= p; q++)
+						{
+							//TO CHECK IF!!!
+							if(p == q)
+							{
+								if(mat[i*blockDim + p][j*blockDim + q] < 0)
+								{
+									printErrorMessage(-14, rankL, "parallelCholeskyFact_Block\0");
+									MPI_Abort(MPI_COMM_WORLD, -14);
+								}
+							}
+							else if(fabs(mat[i*blockDim + p][j*blockDim + q] - mat[j*blockDim + q][i*blockDim + p]) > EPS_CH_EQ)
+							{
+								printErrorMessage(-14, rankL, "parallelCholeskyFact_Block\0");
+								MPI_Abort(MPI_COMM_WORLD, -14);
+							}
+						}
+					}
 				}
+				//Sending block to be processed to process procMatrix[i][j]
+				MPI_Send(&(mat[i * blockDim][j * blockDim]), 1, blockType2D, procMatrix[i][j], 0, MPI_COMM_WORLD);
 			}
 		}
-		receive = 0;
-		for(i = 1; i < procMatDim * procMatDim; i++)
+		//Collecting results from all worker processes
+		for(i = 0; i < procMatDim; i++)
 		{
-			MPI_Send(&receive, 1, MPI_INT, i, 100, MPI_COMM_WORLD);
+			for(j = 0; j <= i; j++)
+			{
+				MPI_Recv(&((*L)[i * blockDim][j * blockDim]), 1, blockType2D, procMatrix[i][j], 111, MPI_COMM_WORLD, &status);
+			}
 		}
 	}
 	else
 	{
-		do	
+		//Receiving matrix block to processed
+		MPI_Recv(&(localElems[0][0]), blockDim * blockDim, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
+
+		//WORKER process
+		if(isDiagonal)
 		{
-			MPI_Recv(&receive, 1, MPI_INT, 0, 100, MPI_COMM_WORLD, &status);
-			if(receive)
+			//Processes a diagonal block
+			if(procLine == 0)
 			{
-				//Receive line number
-				MPI_Recv(&i, 1, MPI_INT, 0, 1, MPI_COMM_WORLD, &status);
-				//printf("\nProcess %d: received line %d", rankL, i);
-				//Receive column number
-				MPI_Recv(&j, 1, MPI_INT, 0, 2, MPI_COMM_WORLD, &status);
-				//printf("\nProcess %d: received column %d", rankL, j);
-				//Receive element
-				MPI_Recv(&toSend, 1, MPI_DOUBLE, 0, 3, MPI_COMM_WORLD, &status);
-				//printf("\nProcess %d: received elem %.3lf\n", rankL, toSend);
-				ok = 1;
-				for(k = 0; k < currentNrL; k++)
+				res = serialCholeskyFact(localElems, blockDim, &localL);	
+				if(res != 0)
 				{
-					if(i == localLine[k])
-					{
-						for(p = 0; p < currentNrC; p++)
-						{
-							if(j == localColumn[p])
-							{
-								localElem[k][p] = toSend;
-								receivedElem[k][p] = 1;
-								ok = 0;
-								break;
-							}
-						}
-					}
-					if(!ok)
-					{
-						break;
-					}
+					printErrorMessage(res, rankL, "parallelCholeskyFact_Block -> serialCholeskyFact\0");
+					MPI_Abort(MPI_COMM_WORLD, res);
 				}
+				//Sending computed block to column processes
+				for(i = 1; i < procMatDim; i++)
+				{
+					MPI_Send(&(localL[0][0]), blockDim*blockDim, MPI_DOUBLE, procMatrix[i][0], 1, MPI_COMM_WORLD);
+				}
+				//Sending computed L-block to main process (0)
+				MPI_Send(&(localL[0][0]), blockDim*blockDim, MPI_DOUBLE, 0, 111, MPI_COMM_WORLD);
+			}
+			else
+			{
+				if(malloc2ddouble(&localL, blockDim, blockDim) != 0 || malloc2ddouble(&auxContainer, blockDim, blockDim) != 0)
+				{	
+					printErrorMessage(-5, rankL, "parallelCholeskyFact_Block\0");
+					MPI_Abort(MPI_COMM_WORLD, -5);
+				}
+				//Receive partial sum block from process procMatrix[procLine][0]
+				MPI_Recv(&(auxContainer[0][0]), blockDim*blockDim, MPI_DOUBLE, procMatrix[procLine][0], 2, MPI_COMM_WORLD, &status);
+
+				//Send computed L-block to all inferior column processes
+				//Send computed L-block to main process
 			}
 		}
-		while(receive);
-	}			
+		else
+		{
+			//Worker does not process a diagonal block
+			if(malloc2ddouble(&auxContainer, blockDim, blockDim) != 0 || malloc2ddouble(&localL, blockDim, blockDim) != 0)
+			{	
+				printErrorMessage(-5, rankL, "parallelCholeskyFact_Block\0");
+				MPI_Abort(MPI_COMM_WORLD, -5);
+			}
+			for(i = procColumn; i < procLine; i++)
+			{
+				//Receive necessary computation info from process above column process 
+				MPI_Recv(&(auxContainer[0][0]), blockDim * blockDim, MPI_DOUBLE, procMatrix[i][procColumn], 1, MPI_COMM_WORLD, &status);
+				if(i == procColumn)
+				{
+					//Information received is used to compute localL block which will be sent to process procMatrix[procLine][procLine]
+				}
+				else
+				{
+					//Information is processed and the result is sent to process procMatrix[procLine][procColumn + i]
+				}
+				//Send computed L-block to all inferior column processes
+				//Send computed L-block to main process
+			}
+		}
+		//Free localL, localElems, auxContainer
+	}
 
-	//printf("\nProcess %d - received element:\n", rankL);
-	//printMatrixDouble(localElem, blockDim, blockDim);
 
-	//Free memory
-	free(localLine);
-	free(computedX);
-	free(localColumn);
 
-	free2ddouble(&localElem);	
-	free2ddouble(&localLvalues);
+
 	free2dint(&procMatrix);
-	free2dint(&procElemMatrix);
-	free2dint(&receivedElem);
-	
-	//printf("\n\n\nProcess %d: DONE!", rankL);
+	MPI_Type_free(&blockType2D);
 	return 0;
 }
 
