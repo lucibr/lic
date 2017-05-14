@@ -67,7 +67,7 @@ int parallelCholeskyFact_Block(double **mat, int matDim, double ***L, int blockD
 {
 	int rankL, i, j, aux, procMatDim, necProcs, isDiagonal = 0, procLine, procColumn, res, p, q, k,
 		**procMatrix;
-	double 	**localElems, auxF, 
+	double 	**localElems,
 			**localL,
 			**auxContainer,
 			**auxRowContainer;
@@ -141,7 +141,7 @@ int parallelCholeskyFact_Block(double **mat, int matDim, double ***L, int blockD
 		}
 		
 		//printMatrixInt(procMatrix, procMatDim, procMatDim);
-		//printf("\nProcese necesare: %d", necProcs);
+		printf("\nProcese necesare: %d", necProcs);
 		//Main process - distributing data to workers 1...necProcs-1
 		for(i = 0; i < procMatDim; i++)
 		{
@@ -170,7 +170,6 @@ int parallelCholeskyFact_Block(double **mat, int matDim, double ***L, int blockD
 					{
 						for(q = 0; q <= p; q++)
 						{
-							//TO CHECK IF!!!
 							if(p == q)
 							{
 								if(mat[i*blockDim + p][j*blockDim + q] < 0)
@@ -334,11 +333,7 @@ int parallelCholeskyFact_Block(double **mat, int matDim, double ***L, int blockD
 					}
 					//Send partial sums to diagonal process on the  same line ???????????
 					MPI_Send(&(auxContainer[0][0]), blockDim * blockDim, MPI_DOUBLE, procMatrix[procLine][procLine], 2, MPI_COMM_WORLD);
-					//Send computed L-block to all inferior column processes
-					for(j = procLine+1; j < procMatDim; j++)
-					{
-						MPI_Send(&(localL[0][0]), blockDim*blockDim, MPI_DOUBLE, procMatrix[j][procColumn], 1, MPI_COMM_WORLD);
-					}
+					
 				}
 				else
 				{
@@ -360,12 +355,14 @@ int parallelCholeskyFact_Block(double **mat, int matDim, double ***L, int blockD
 						}
 					}
 					//Send computed partial sums to right row porcesses 
-					//for(j = i; j < procLine; j++)
-					//{
-						MPI_Send(&(auxRowContainer[0][0]), blockDim * blockDim, MPI_DOUBLE, procMatrix[procLine][i], 2, MPI_COMM_WORLD);
-					//}
+					MPI_Send(&(auxRowContainer[0][0]), blockDim * blockDim, MPI_DOUBLE, procMatrix[procLine][i], 2, MPI_COMM_WORLD);
 					free2ddouble(&auxRowContainer);
 				}
+			}
+			//Send computed L-block to all inferior column processes
+			for(j = procLine+1; j < procMatDim; j++)
+			{
+				MPI_Send(&(localL[0][0]), blockDim*blockDim, MPI_DOUBLE, procMatrix[j][procColumn], 1, MPI_COMM_WORLD);
 			}
 			//Send computed L-block to main process
 			MPI_Send(&(localL[0][0]), blockDim*blockDim, MPI_DOUBLE, 0, 111, MPI_COMM_WORLD);

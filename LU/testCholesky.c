@@ -32,16 +32,16 @@ int main(int argc, char *argv[])
 			}
 			printf("\nProcess %d: Reading done...", rank);
 			fclose(in);
-			printf("\nProcess %d: File closed...\nThe matrix is:\n", rank);			
-			printMatrixDouble(mat, matDim, matDim);
+			//printf("\nProcess %d: File closed...\nThe matrix is:\n", rank);			
+			//printMatrixDouble(mat, matDim, matDim);
 		}
 		res = choleskyFact(mat, matDim, &L, dimBlock, &runtime, numTasks);
 		if(rank == 0)
 		{
 			if (res == 0)
 			{
-				printf("\nMatricea L:\n");
-				printMatrixDouble(L, matDim, matDim);
+				//printf("\nMatricea L:\n");
+				//printMatrixDouble(L, matDim, matDim);
 				printf("\n\nTimpul de executie: %f\n", runtime);
 			}
 			else
